@@ -26,6 +26,13 @@ const (
 	pinApproveWindow = 10 * time.Minute
 )
 
+// apiV1KeyLimit/apiV1KeyWindow bound how many requests one scoped API
+// key (identified by its id) may make to /api/v1/*.
+const (
+	apiV1KeyLimit  = 30
+	apiV1KeyWindow = time.Minute
+)
+
 // Server is the admin-listener HTTP handler.
 type Server struct {
 	cfg       *config.Config
@@ -36,6 +43,7 @@ type Server struct {
 	log       *slog.Logger
 	csrfToken string
 	pinLimit  *auth.RateLimiter
+	keyLimit  *auth.RateLimiter
 
 	handler http.Handler
 }
@@ -58,6 +66,7 @@ func New(cfg *config.Config, st *state.Store, pins *pin.Manager, secret []byte, 
 		log:       log,
 		csrfToken: token,
 		pinLimit:  auth.NewRateLimiter(pinApproveLimit, pinApproveWindow),
+		keyLimit:  auth.NewRateLimiter(apiV1KeyLimit, apiV1KeyWindow),
 	}
 
 	mux := http.NewServeMux()
@@ -76,7 +85,13 @@ func New(cfg *config.Config, st *state.Store, pins *pin.Manager, secret []byte, 
 	mux.HandleFunc("DELETE /api/passes/{id}", s.handlePassRevoke)
 	mux.HandleFunc("GET /api/events", s.handleEventsList)
 
-	s.handler = s.securityHeaders(s.cidrCheck(s.csrfAndAuth(mux)))
+	mux.HandleFunc("GET /api/v1/services/{name}", s.handleV1ServiceGet)
+	mux.HandleFunc("POST /api/v1/services/{name}/open", s.handleV1ServiceOpen)
+	mux.HandleFunc("POST /api/v1/services/{name}/close", s.handleV1ServiceClose)
+	mux.HandleFunc("OPTIONS /api/v1/services/{name}", s.handleV1Preflight)
+	mux.HandleFunc("OPTIONS /api/v1/services/{name}/{action}", s.handleV1Preflight)
+
+	s.handler = s.securityHeaders(s.cidrCheck(s.csrfAndAuth(s.apiV1Guard(mux))))
 	return s, nil
 }
 

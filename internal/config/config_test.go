@@ -1,8 +1,22 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
+
+// validAPIKey returns an APIKey that passes Validate against
+// baseValidConfig's single service "svc1".
+func validAPIKey() APIKey {
+	return APIKey{
+		ID:        "key1",
+		Name:      "test key",
+		Hash:      strings.Repeat("a", 64),
+		Services:  []string{"svc1"},
+		Actions:   []string{KeyActionStatus},
+		CreatedAt: "2026-10-25T00:00:00Z",
+	}
+}
 
 func baseValidConfig() Config {
 	return Config{
@@ -141,6 +155,136 @@ func TestValidate_Table(t *testing.T) {
 			name:    "invalid pass_ttl",
 			mutate:  func(c *Config) { c.PassTTL = "not-a-duration" },
 			wantErr: true,
+		},
+		{
+			name:    "valid api key",
+			mutate:  func(c *Config) { c.APIKeys = []APIKey{validAPIKey()} },
+			wantErr: false,
+		},
+		{
+			name: "api key missing id",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.ID = ""
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key duplicate id",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				c.APIKeys = []APIKey{k, k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key missing name",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.Name = ""
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key bad hash length",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.Hash = "abc123"
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key non-hex hash",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.Hash = strings.Repeat("g", 64)
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key empty actions",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.Actions = nil
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key invalid action",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.Actions = []string{"delete"}
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key empty services",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.Services = nil
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key unknown service",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.Services = []string{"nope"}
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key wildcard service",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.Services = []string{"*"}
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: false,
+		},
+		{
+			name: "api key invalid allow_origin with path",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.AllowOrigins = []string{"https://geo.lan/path"}
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key invalid allow_origin wildcard",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.AllowOrigins = []string{"*"}
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key invalid allow_origin scheme",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.AllowOrigins = []string{"ftp://geo.lan"}
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: true,
+		},
+		{
+			name: "api key valid allow_origin",
+			mutate: func(c *Config) {
+				k := validAPIKey()
+				k.AllowOrigins = []string{"https://geo.lan"}
+				c.APIKeys = []APIKey{k}
+			},
+			wantErr: false,
 		},
 	}
 

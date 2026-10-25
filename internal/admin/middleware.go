@@ -38,14 +38,21 @@ func (s *Server) cidrCheck(next http.Handler) http.Handler {
 // csrfAndAuth guards mutating/API requests:
 //   - GET /, GET /static/* and GET /healthz need no further check (CIDR
 //     already applied).
-//   - /api/* and /metrics optionally require the bearer token
-//     (admin.token) when configured.
+//   - /api/* (except /api/v1/*, which has its own auth in apiV1Guard)
+//     and /metrics optionally require the bearer token (admin.token)
+//     when configured.
 //   - mutating /api/* requests (POST/DELETE) additionally require the
 //     panel CSRF token in X-CSRF-Token, unless a valid bearer token was
 //     presented (that covers the CLI and other machine clients). The
 //     token is available to any CIDR-allowed caller via GET /api/csrf.
 func (s *Server) csrfAndAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/") {
+			// Authenticated and scoped by apiV1Guard, further down the
+			// chain: the panel's admin.token/CSRF rules don't apply.
+			next.ServeHTTP(w, r)
+			return
+		}
 		isAPI := strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/metrics"
 		bearerOK := s.checkBearer(r)
 

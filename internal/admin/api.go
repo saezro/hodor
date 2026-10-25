@@ -69,7 +69,25 @@ func (s *Server) handleServiceOpen(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "unknown service or group"})
 		return
 	}
+	s.openService(w, r, key, clientLabel(r, s.cfg))
+}
 
+func (s *Server) handleServiceClose(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	key, ok := s.resolveKey(name)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: "unknown service or group"})
+		return
+	}
+	s.closeService(w, key)
+}
+
+// openService opens the state entry identified by key (a resolved
+// service or group state key, see stateKey/resolveKey) for the
+// duration in r's JSON body ({"for": "3h"}, empty = until closed),
+// recording openedBy as who did it. Shared by the panel's
+// /api/services/{name}/open and the scoped /api/v1/services/{name}/open.
+func (s *Server) openService(w http.ResponseWriter, r *http.Request, key, openedBy string) {
 	var req OpenRequest
 	if r.ContentLength != 0 {
 		_ = json.NewDecoder(r.Body).Decode(&req)
@@ -85,7 +103,6 @@ func (s *Server) handleServiceOpen(w http.ResponseWriter, r *http.Request) {
 		dur = d
 	}
 
-	openedBy := clientLabel(r, s.cfg)
 	if err := s.state.Open(key, dur, openedBy); err != nil {
 		s.log.Error("open failed", "key", key, "err", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "could not open"})
@@ -94,13 +111,10 @@ func (s *Server) handleServiceOpen(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) handleServiceClose(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	key, ok := s.resolveKey(name)
-	if !ok {
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: "unknown service or group"})
-		return
-	}
+// closeService closes the state entry identified by key. Shared by
+// the panel's /api/services/{name}/close and the scoped
+// /api/v1/services/{name}/close.
+func (s *Server) closeService(w http.ResponseWriter, key string) {
 	if err := s.state.Close(key); err != nil {
 		s.log.Error("close failed", "key", key, "err", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "could not close"})

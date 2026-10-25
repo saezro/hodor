@@ -98,6 +98,23 @@ services:
 
 Validate it anytime with `hodor check -c hodor.yaml`.
 
+## API keys
+
+For a custom button or dashboard that opens/closes a service without visiting the panel, mint a scoped key:
+
+```
+hodor key new --name geo-button --services geo --actions open,close,status
+```
+
+This prints the raw key once and a YAML block to paste under `api_keys` in `hodor.yaml` (only its sha256 hash is stored). Use it against the versioned, LAN-only admin API:
+
+```
+curl -H "Authorization: Bearer <key>" https://hodor.lan:8081/api/v1/services/geo
+curl -X POST -H "Authorization: Bearer <key>" -d '{"for":"1h"}' https://hodor.lan:8081/api/v1/services/geo/open
+```
+
+Add `allow_origins: [https://games.home.example.com]` to the key for CORS from a browser page embedding the button.
+
 ## forwardAuth mode
 
 Don't want hodor proxying traffic itself? Point your existing reverse proxy at `GET /auth` on hodor's public listener instead — `200` means pass, a closed service redirects (or `401`s, for nginx) to hodor's own closed page.

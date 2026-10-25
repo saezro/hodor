@@ -19,3 +19,16 @@ services:
     mode: proxy
     upstream: http://cluedo:3465
     group: games
+
+# Scoped API keys for the versioned /api/v1 endpoints (embeddable
+# button, etc.). Generate with `hodor key new --name foo --services
+# geo --actions open,close,status`; only the sha256 hash is stored
+# here, the raw key is shown once at creation time.
+# api_keys:
+#   - id: a1b2c3d4
+#     name: geo-button
+#     hash: <sha256 hex of the generated key>
+#     services: [geo]
+#     actions: [open, close, status]
+#     allow_origins: [https://games.home.example.com]
+#     created_at: 2026-10-25T00:00:00Z

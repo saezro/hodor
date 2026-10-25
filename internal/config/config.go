@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"time"
 
@@ -21,6 +22,7 @@ type Config struct {
 	Durations  []string  `yaml:"durations"`
 	PassTTL    string    `yaml:"pass_ttl"`
 	Services   []Service `yaml:"services"`
+	APIKeys    []APIKey  `yaml:"api_keys"`
 	OnChange   string    `yaml:"on_change"` // webhook URL, optional
 
 	// Parsed form, filled by Validate.
@@ -90,6 +92,29 @@ type Service struct {
 	AccentColor string `yaml:"accent_color"`
 	LogoURL     string `yaml:"logo_url"`
 }
+
+// APIKey is one scoped credential for the versioned /api/v1 endpoints
+// (see internal/admin and internal/apikey). Only its sha256 hash is
+// ever persisted; the raw key is shown once, at creation time, by
+// `hodor key new`.
+type APIKey struct {
+	ID           string   `yaml:"id"`
+	Name         string   `yaml:"name"`
+	Hash         string   `yaml:"hash"`     // sha256 hex of the raw key
+	Services     []string `yaml:"services"` // service name, group name, or "*" for all
+	Actions      []string `yaml:"actions"`  // subset of "open", "close", "status"
+	AllowOrigins []string `yaml:"allow_origins"`
+	CreatedAt    string   `yaml:"created_at"`
+}
+
+const (
+	// KeyActionOpen is the API key action matching POST .../open.
+	KeyActionOpen = "open"
+	// KeyActionClose is the API key action matching POST .../close.
+	KeyActionClose = "close"
+	// KeyActionStatus is the API key action matching GET .../{name}.
+	KeyActionStatus = "status"
+)
 
 // ServiceAuth holds forwardauth-mode specific options.
 type ServiceAuth struct {
@@ -263,6 +288,97 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if err := c.validateAPIKeys(names, groups); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateAPIKeys checks c.APIKeys against the already-validated set of
+// service names and group names.
+func (c *Config) validateAPIKeys(names, groups map[string]bool) error {
+	ids := map[string]bool{}
+	validActions := map[string]bool{KeyActionOpen: true, KeyActionClose: true, KeyActionStatus: true}
+
+	for i := range c.APIKeys {
+		k := &c.APIKeys[i]
+		if k.ID == "" {
+			return fmt.Errorf("api_keys[%d]: id is required", i)
+		}
+		if ids[k.ID] {
+			return fmt.Errorf("api_keys: duplicate id %q", k.ID)
+		}
+		ids[k.ID] = true
+
+		if k.Name == "" {
+			return fmt.Errorf("api_keys[%s]: name is required", k.ID)
+		}
+		if len(k.Hash) != 64 || !isHexString(k.Hash) {
+			return fmt.Errorf("api_keys[%s]: hash must be 64 hex characters (sha256)", k.ID)
+		}
+
+		if len(k.Actions) == 0 {
+			return fmt.Errorf("api_keys[%s]: actions is required", k.ID)
+		}
+		for _, a := range k.Actions {
+			if !validActions[a] {
+				return fmt.Errorf("api_keys[%s]: invalid action %q (want one of open, close, status)", k.ID, a)
+			}
+		}
+
+		if len(k.Services) == 0 {
+			return fmt.Errorf("api_keys[%s]: services is required", k.ID)
+		}
+		for _, svc := range k.Services {
+			if svc == "*" || names[svc] || groups[svc] {
+				continue
+			}
+			return fmt.Errorf("api_keys[%s]: %q is not a known service, group or \"*\"", k.ID, svc)
+		}
+
+		for _, origin := range k.AllowOrigins {
+			if err := validateOrigin(origin); err != nil {
+				return fmt.Errorf("api_keys[%s]: allow_origins: %w", k.ID, err)
+			}
+		}
+	}
+	return nil
+}
+
+func isHexString(s string) bool {
+	for _, r := range s {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+// validateOrigin checks that origin is a bare scheme+host, as required
+// for an Access-Control-Allow-Origin echo value: http(s) only, no path,
+// no query, no wildcard.
+func validateOrigin(origin string) error {
+	if origin == "*" {
+		return fmt.Errorf("wildcard %q is not allowed", origin)
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return fmt.Errorf("invalid origin %q: %w", origin, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("origin %q must use http or https", origin)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("origin %q is missing a host", origin)
+	}
+	if u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("origin %q must be scheme+host only, no path", origin)
+	}
+	rebuilt := u.Scheme + "://" + u.Host
+	if rebuilt != origin {
+		return fmt.Errorf("origin %q must be scheme+host only (got extra: %q)", origin, origin)
+	}
 	return nil
 }
 

@@ -6,6 +6,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -16,11 +18,13 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/saezro/hodor/internal/admin"
+	"github.com/saezro/hodor/internal/apikey"
 	"github.com/saezro/hodor/internal/config"
 	"github.com/saezro/hodor/internal/pin"
 	"github.com/saezro/hodor/internal/proxy"
@@ -45,6 +49,8 @@ func main() {
 		err = cmdClose(os.Args[2:])
 	case "status":
 		err = cmdStatus(os.Args[2:])
+	case "key":
+		err = cmdKey(os.Args[2:])
 	case "-h", "--help", "help":
 		usage()
 		return
@@ -64,7 +70,94 @@ func usage() {
   hodor check [-c hodor.yaml]
   hodor open <service|group> [-c hodor.yaml] [--for 3h]
   hodor close <service|group> [-c hodor.yaml]
-  hodor status [-c hodor.yaml]`)
+  hodor status [-c hodor.yaml]
+  hodor key new [--name N] [--services a,b] [--actions open,close,status]`)
+}
+
+// --- key new ---
+
+func cmdKey(args []string) error {
+	if len(args) == 0 || args[0] != "new" {
+		return errors.New("usage: hodor key new [--name N] [--services a,b] [--actions open,close,status]")
+	}
+	fs := flag.NewFlagSet("key new", flag.ExitOnError)
+	name := fs.String("name", "", "human-readable name for this key (required)")
+	services := fs.String("services", "*", "comma-separated service/group names, or * for all")
+	actions := fs.String("actions", "open,close,status", "comma-separated subset of open,close,status")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if *name == "" {
+		return errors.New("--name is required")
+	}
+
+	id, err := randomHex(4) // 8 hex chars
+	if err != nil {
+		return err
+	}
+	rawKey, hashHex, err := apikey.Generate()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("key (shown once, store it securely):")
+	fmt.Println(" ", rawKey)
+	fmt.Println()
+	fmt.Println("add under api_keys in hodor.yaml:")
+	fmt.Println()
+	fmt.Print(keyYAML(id, *name, hashHex, *services, *actions, time.Now().UTC()))
+	return nil
+}
+
+// keyYAML renders a single api_keys entry as a YAML block. services and
+// actions are comma-separated lists; each element is emitted as a quoted
+// YAML string so that values like "*" are not parsed as YAML aliases.
+func keyYAML(id, name, hashHex, services, actions string, createdAt time.Time) string {
+	k := config.APIKey{
+		ID:        id,
+		Name:      name,
+		Hash:      hashHex,
+		Services:  splitComma(services),
+		Actions:   splitComma(actions),
+		CreatedAt: createdAt.Format(time.RFC3339),
+	}
+	var buf bytes.Buffer
+	buf.WriteString("api_keys:\n")
+	buf.WriteString("  - id: " + strconv.Quote(k.ID) + "\n")
+	buf.WriteString("    name: " + strconv.Quote(k.Name) + "\n")
+	buf.WriteString("    hash: " + strconv.Quote(k.Hash) + "\n")
+	buf.WriteString("    services: [" + quoteList(k.Services) + "]\n")
+	buf.WriteString("    actions: [" + quoteList(k.Actions) + "]\n")
+	buf.WriteString("    created_at: " + strconv.Quote(k.CreatedAt) + "\n")
+	return buf.String()
+}
+
+func splitComma(s string) []string {
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func quoteList(items []string) string {
+	quoted := make([]string, len(items))
+	for i, s := range items {
+		quoted[i] = strconv.Quote(s)
+	}
+	return strings.Join(quoted, ", ")
+}
+
+func randomHex(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func configPath(fs *flag.FlagSet) *string {
