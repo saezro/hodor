@@ -214,6 +214,22 @@ func (m *Manager) Consume(sessionID string) {
 	delete(m.byID, sessionID)
 }
 
+// PurgeAbsent removes every pending/approved PIN whose Service is not in
+// liveServiceNames (called after a config swap, see
+// internal/config.Live.OnSwap, alongside state.Store.PurgeAbsent): a PIN
+// for a service that just got deleted or renamed must not be approvable
+// or consumable afterwards, since pin state is memory-only and would
+// otherwise survive until its TTL regardless of the live config.
+func (m *Manager) PurgeAbsent(liveServiceNames map[string]bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id, e := range m.byID {
+		if !liveServiceNames[e.Service] {
+			delete(m.byID, id)
+		}
+	}
+}
+
 // gcLocked drops expired entries. Caller must hold m.mu.
 func (m *Manager) gcLocked(now time.Time) {
 	for id, e := range m.byID {

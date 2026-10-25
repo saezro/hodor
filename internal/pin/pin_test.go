@@ -226,6 +226,32 @@ func TestPending_ExcludesApprovedAndExpired(t *testing.T) {
 	}
 }
 
+func TestPurgeAbsent(t *testing.T) {
+	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	m := New(clock)
+
+	kept, err := m.Create("svc-a")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	removed, err := m.Create("svc-b")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	m.PurgeAbsent(map[string]bool{"svc-a": true})
+
+	if _, ok := m.Get(kept.SessionID); !ok {
+		t.Errorf("expected PIN for live service svc-a to remain")
+	}
+	if _, ok := m.Get(removed.SessionID); ok {
+		t.Errorf("expected PIN for absent service svc-b to be gone")
+	}
+	if _, err := m.Approve(removed.Code); err != ErrNotFound {
+		t.Errorf("Approve(purged code) err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestCreate_TooManyPending(t *testing.T) {
 	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 	m := New(clock)

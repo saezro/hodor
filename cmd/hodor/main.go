@@ -160,6 +160,23 @@ func randomHex(n int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// liveKeys returns the state keys and service names currently in c,
+// for state.Store.PurgeAbsent and pin.Manager.PurgeAbsent: a state key is
+// svc.Group when set (state is shared across a group), else svc.Name.
+func liveKeys(c *config.Config) (stateKeys, serviceNames map[string]bool) {
+	stateKeys = make(map[string]bool, len(c.Services))
+	serviceNames = make(map[string]bool, len(c.Services))
+	for _, svc := range c.Services {
+		serviceNames[svc.Name] = true
+		key := svc.Name
+		if svc.Group != "" {
+			key = svc.Group
+		}
+		stateKeys[key] = true
+	}
+	return stateKeys, serviceNames
+}
+
 func configPath(fs *flag.FlagSet) *string {
 	def := os.Getenv("HODOR_CONFIG")
 	if def == "" {
@@ -198,9 +215,21 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return fmt.Errorf("state: %w", err)
 	}
+
+	// State is persisted to disk, so a service deleted from the yaml
+	// while hodor was stopped would otherwise have its stale open/expiry
+	// state and device passes loaded right back in on this startup; purge
+	// it against the config we just read before anything else touches st.
+	stateKeys, serviceNames := liveKeys(cfg)
+	if err := st.PurgeAbsent(stateKeys, serviceNames); err != nil {
+		return fmt.Errorf("state: purge: %w", err)
+	}
+
 	st.SetOnChange(webhook.Notifier(cfg.OnChange, logger))
 	st.StartAutoClose(time.Minute)
 	defer st.Stop()
+
+	pins := pin.New(nil)
 
 	// A service that disappears from the live config (DeleteService, or
 	// a reload/save whose new config just drops it) must lose its
@@ -209,22 +238,12 @@ func cmdServe(args []string) error {
 	// in-memory+persisted state the old one left behind instead of
 	// starting closed and pass-less.
 	live.OnSwap(func(_, next *config.Config) {
-		stateKeys := make(map[string]bool, len(next.Services))
-		serviceNames := make(map[string]bool, len(next.Services))
-		for _, svc := range next.Services {
-			serviceNames[svc.Name] = true
-			key := svc.Name
-			if svc.Group != "" {
-				key = svc.Group
-			}
-			stateKeys[key] = true
-		}
+		stateKeys, serviceNames := liveKeys(next)
 		if err := st.PurgeAbsent(stateKeys, serviceNames); err != nil {
 			logger.Error("state: purge absent services failed", "err", err)
 		}
+		pins.PurgeAbsent(serviceNames)
 	})
-
-	pins := pin.New(nil)
 
 	publicSrv, err := proxy.New(live, st, pins, secret, logger)
 	if err != nil {
