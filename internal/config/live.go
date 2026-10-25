@@ -35,6 +35,39 @@ type Live struct {
 	// racing a reload - can't interleave their read-modify-write of
 	// managed.yaml.
 	saveMu sync.Mutex
+
+	// swapMu guards onSwap, registered once at startup but read on every
+	// successful swap.
+	swapMu sync.Mutex
+	onSwap []SwapFunc
+}
+
+// SwapFunc is called after a config swap (Reload or a panel save)
+// succeeds, with the config that was live just before the swap and the
+// one now live. old is nil only for the very first NewLive load, which
+// never calls a hook anyway.
+type SwapFunc func(old, next *Config)
+
+// OnSwap registers f to be called, synchronously, after every
+// subsequent successful config swap. Intended for one-time startup
+// wiring (e.g. internal/state purging services that disappeared from
+// the new config); not safe to assume ordering across multiple hooks.
+func (l *Live) OnSwap(f SwapFunc) {
+	l.swapMu.Lock()
+	l.onSwap = append(l.onSwap, f)
+	l.swapMu.Unlock()
+}
+
+// fireSwap runs every registered OnSwap hook with old and next. Called
+// after the new config is already live (ptr.Store), so a hook that
+// reads l.Get() sees next.
+func (l *Live) fireSwap(old, next *Config) {
+	l.swapMu.Lock()
+	hooks := append([]SwapFunc(nil), l.onSwap...)
+	l.swapMu.Unlock()
+	for _, h := range hooks {
+		h(old, next)
+	}
 }
 
 // NewLive loads basePath and its config_overlay for the first time and
@@ -96,6 +129,7 @@ func (l *Live) Reload() (warnings []string, err error) {
 	}
 	warnings = keepNonHotReloadable(cur, next)
 	l.ptr.Store(next)
+	l.fireSwap(cur, next)
 	return warnings, nil
 }
 
@@ -126,14 +160,16 @@ func (l *Live) mutateOverlay(fn func(base *Config, ov *Overlay) error) (*Config,
 	if err := merged.Validate(); err != nil {
 		return nil, err
 	}
+	cur := l.Get()
 	// Defensive: the overlay never touches these, but keep the running
 	// values authoritative regardless of what base now says on disk.
-	keepNonHotReloadable(l.Get(), merged)
+	keepNonHotReloadable(cur, merged)
 
 	if err := SaveOverlay(l.overlayPath, ov); err != nil {
 		return nil, err
 	}
 	l.ptr.Store(merged)
+	l.fireSwap(cur, merged)
 	return merged, nil
 }
 

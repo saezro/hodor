@@ -202,6 +202,28 @@ func cmdServe(args []string) error {
 	st.StartAutoClose(time.Minute)
 	defer st.Stop()
 
+	// A service that disappears from the live config (DeleteService, or
+	// a reload/save whose new config just drops it) must lose its
+	// open/expiry state and its device passes: otherwise a later
+	// service recreated under the same name would inherit whatever
+	// in-memory+persisted state the old one left behind instead of
+	// starting closed and pass-less.
+	live.OnSwap(func(_, next *config.Config) {
+		stateKeys := make(map[string]bool, len(next.Services))
+		serviceNames := make(map[string]bool, len(next.Services))
+		for _, svc := range next.Services {
+			serviceNames[svc.Name] = true
+			key := svc.Name
+			if svc.Group != "" {
+				key = svc.Group
+			}
+			stateKeys[key] = true
+		}
+		if err := st.PurgeAbsent(stateKeys, serviceNames); err != nil {
+			logger.Error("state: purge absent services failed", "err", err)
+		}
+	})
+
 	pins := pin.New(nil)
 
 	publicSrv, err := proxy.New(live, st, pins, secret, logger)

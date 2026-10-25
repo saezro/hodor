@@ -190,6 +190,83 @@ func TestLive_Reload_ListenChanged_WarnsAndKeepsOld(t *testing.T) {
 	}
 }
 
+func TestLive_OnSwap_FiresOnPutAndDeleteServiceNotOnFailedSave(t *testing.T) {
+	dir := t.TempDir()
+	overlayPath := filepath.Join(dir, "managed.yaml")
+	basePath := writeBase(t, dir, overlayPath)
+
+	live, err := NewLive(basePath)
+	if err != nil {
+		t.Fatalf("NewLive: %v", err)
+	}
+
+	var mu sync.Mutex
+	calls := 0
+	live.OnSwap(func(_, _ *Config) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+	})
+
+	if _, err := live.PutService(Service{Name: "svc2", Hosts: []string{"svc2.example.com"}, Mode: ModeProxy, Upstream: "http://127.0.0.1:9002"}); err != nil {
+		t.Fatalf("PutService: %v", err)
+	}
+	mu.Lock()
+	got := calls
+	mu.Unlock()
+	if got != 1 {
+		t.Fatalf("OnSwap calls after PutService = %d, want 1", got)
+	}
+
+	// A rejected save (invalid service) must not swap, so must not fire.
+	if _, err := live.PutService(Service{Name: "bad", Mode: ModeProxy}); err == nil {
+		t.Fatalf("PutService with invalid service: want error, got nil")
+	}
+	mu.Lock()
+	got = calls
+	mu.Unlock()
+	if got != 1 {
+		t.Fatalf("OnSwap calls after a rejected save = %d, want still 1", got)
+	}
+
+	if _, err := live.DeleteService("svc2"); err != nil {
+		t.Fatalf("DeleteService: %v", err)
+	}
+	mu.Lock()
+	got = calls
+	mu.Unlock()
+	if got != 2 {
+		t.Fatalf("OnSwap calls after DeleteService = %d, want 2", got)
+	}
+}
+
+func TestLive_OnSwap_FiresOnReloadWithOldAndNext(t *testing.T) {
+	dir := t.TempDir()
+	overlayPath := filepath.Join(dir, "managed.yaml")
+	basePath := writeBase(t, dir, overlayPath)
+
+	live, err := NewLive(basePath)
+	if err != nil {
+		t.Fatalf("NewLive: %v", err)
+	}
+	cfgBefore := live.Get()
+
+	var gotOld, gotNext *Config
+	live.OnSwap(func(old, next *Config) {
+		gotOld, gotNext = old, next
+	})
+
+	if _, err := live.Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if gotOld != cfgBefore {
+		t.Errorf("OnSwap old = %p, want the config live before Reload (%p)", gotOld, cfgBefore)
+	}
+	if gotNext != live.Get() {
+		t.Errorf("OnSwap next = %p, want the config now live (%p)", gotNext, live.Get())
+	}
+}
+
 func TestLive_MissingOverlay_EqualsBaseAlone(t *testing.T) {
 	dir := t.TempDir()
 	overlayPath := filepath.Join(dir, "managed.yaml") // never written

@@ -11,8 +11,9 @@ import (
 // remoteTrusted reports whether r's direct peer (RemoteAddr, never a
 // header) is one of the configured public.trusted_proxies, i.e. a
 // reverse proxy hodor is known to sit behind and may therefore trust
-// for X-Forwarded-* values.
-func (s *Server) remoteTrusted(r *http.Request) bool {
+// for X-Forwarded-* values. cfg must be the config already read for
+// this request.
+func (s *Server) remoteTrusted(cfg *config.Config, r *http.Request) bool {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
@@ -21,7 +22,7 @@ func (s *Server) remoteTrusted(r *http.Request) bool {
 	if ip == nil {
 		return false
 	}
-	return auth.IPAllowed(s.cfg().Public.ParsedProxies, ip)
+	return auth.IPAllowed(cfg.Public.ParsedProxies, ip)
 }
 
 // handleForwardAuth implements GET /auth for Traefik forwardAuth / Caddy
@@ -31,13 +32,14 @@ func (s *Server) remoteTrusted(r *http.Request) bool {
 // connection's own Host/TLS, so an untrusted client cannot spoof its way
 // into an arbitrary redirect target or host lookup.
 func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
+	cfg := s.cfg()
 	host := r.Host
 	proto := "http"
 	if r.TLS != nil {
 		proto = "https"
 	}
 
-	if s.remoteTrusted(r) {
+	if s.remoteTrusted(cfg, r) {
 		if h := r.Header.Get("X-Forwarded-Host"); h != "" {
 			host = h
 		}
@@ -46,7 +48,7 @@ func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	svc := s.lookupHost(host)
+	svc := s.lookupHost(cfg, host)
 	if svc == nil {
 		http.Error(w, "unknown host", http.StatusNotFound)
 		return

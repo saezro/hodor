@@ -143,12 +143,15 @@ func (s *Server) routingFor(cfg *config.Config) *routing {
 }
 
 // lookupHost finds the configured service for a Host header value,
-// stripping any port.
-func (s *Server) lookupHost(host string) *config.Service {
+// stripping any port. cfg must be the config already read for this
+// request (via s.cfg()), so the lookup and any routing table built from
+// it (e.g. the reverse proxy) stay consistent even if a reload/save
+// swaps the live config mid-request.
+func (s *Server) lookupHost(cfg *config.Config, host string) *config.Service {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
-	return s.routingFor(s.cfg()).hostToService[host]
+	return s.routingFor(cfg).hostToService[host]
 }
 
 // stateKey returns the state-store key for a service: its group name if
@@ -187,13 +190,14 @@ func (s *Server) allowed(r *http.Request, svc *config.Service) bool {
 }
 
 // issuePass creates and persists a new device pass for svc and sets its
-// signed cookie on w.
-func (s *Server) issuePass(w http.ResponseWriter, r *http.Request, svc *config.Service) error {
+// signed cookie on w. cfg must be the config already read for this
+// request.
+func (s *Server) issuePass(cfg *config.Config, w http.ResponseWriter, r *http.Request, svc *config.Service) error {
 	id, err := pass.NewID()
 	if err != nil {
 		return err
 	}
-	ttl := s.cfg().ParsedPassTTL
+	ttl := cfg.ParsedPassTTL
 	if ttl <= 0 {
 		ttl = 30 * 24 * time.Hour
 	}
@@ -208,7 +212,7 @@ func (s *Server) issuePass(w http.ResponseWriter, r *http.Request, svc *config.S
 		Path:     "/",
 		Expires:  expiry,
 		HttpOnly: true,
-		Secure:   s.cookieSecure(r),
+		Secure:   s.cookieSecure(cfg, r),
 		SameSite: http.SameSiteLaxMode,
 	})
 	return nil
@@ -217,16 +221,17 @@ func (s *Server) issuePass(w http.ResponseWriter, r *http.Request, svc *config.S
 // cookieSecure decides the Secure flag for a device-pass cookie: it is
 // true for a direct TLS connection, for an HTTPS request relayed by a
 // trusted reverse proxy (X-Forwarded-Proto, only honored from
-// public.trusted_proxies), or when public.cookie_secure forces it.
-func (s *Server) cookieSecure(r *http.Request) bool {
+// public.trusted_proxies), or when public.cookie_secure forces it. cfg
+// must be the config already read for this request.
+func (s *Server) cookieSecure(cfg *config.Config, r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	if s.remoteTrusted(r) && r.Header.Get("X-Forwarded-Proto") == "https" {
+	if s.remoteTrusted(cfg, r) && r.Header.Get("X-Forwarded-Proto") == "https" {
 		return true
 	}
-	if s.cfg().Public.CookieSecure != nil {
-		return *s.cfg().Public.CookieSecure
+	if cfg.Public.CookieSecure != nil {
+		return *cfg.Public.CookieSecure
 	}
 	return true
 }

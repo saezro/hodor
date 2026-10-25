@@ -44,13 +44,14 @@ func tvPinLimitKey(ip net.IP) string {
 // screens. The service is resolved from the Host header, same as the
 // closed page, since the device visits https://<host>/tv.
 func (s *Server) handleTV(w http.ResponseWriter, r *http.Request) {
-	svc := s.lookupHost(r.Host)
+	cfg := s.cfg()
+	svc := s.lookupHost(cfg, r.Host)
 	if svc == nil {
 		http.NotFound(w, r)
 		return
 	}
 
-	ip := auth.ClientIP(r, s.cfg().Public.ParsedProxies, "X-Forwarded-For")
+	ip := auth.ClientIP(r, cfg.Public.ParsedProxies, "X-Forwarded-For")
 	key := ""
 	if ip != nil {
 		key = tvPinLimitKey(ip)
@@ -94,13 +95,14 @@ func (s *Server) handleTVStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	svc := s.lookupHost(r.Host)
+	cfg := s.cfg()
+	svc := s.lookupHost(cfg, r.Host)
 	if svc == nil || svc.Name != entry.Service {
 		writeJSON(w, map[string]any{"approved": false})
 		return
 	}
 
-	if err := s.issuePass(w, r, svc); err != nil {
+	if err := s.issuePass(cfg, w, r, svc); err != nil {
 		http.Error(w, "could not issue pass", http.StatusInternalServerError)
 		return
 	}

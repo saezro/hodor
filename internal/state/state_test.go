@@ -209,6 +209,65 @@ func TestAddPass_RevokeAndValidity(t *testing.T) {
 	}
 }
 
+func TestPurgeAbsent_ClosesAndStripsPasses(t *testing.T) {
+	st, err := New(filepath.Join(t.TempDir(), "state.json"), []string{"svc"}, newFakeClock(time.Now()))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := st.Open("svc", 0, "tester"); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := st.AddPass(Pass{ID: "p1", Service: "svc"}); err != nil {
+		t.Fatalf("AddPass: %v", err)
+	}
+
+	// svc disappears from the live config: purge with empty valid sets.
+	if err := st.PurgeAbsent(map[string]bool{}, map[string]bool{}); err != nil {
+		t.Fatalf("PurgeAbsent: %v", err)
+	}
+
+	if st.IsOpen("svc") {
+		t.Errorf("expected svc closed after purge")
+	}
+	if st.IsPassValid("p1", "svc") {
+		t.Errorf("expected pass gone after purge")
+	}
+
+	// A service recreated under the same name must start closed and
+	// pass-less, not inherit the purged state.
+	if _, ok := st.Get("svc"); ok {
+		// state deleted entirely (not just closed) is also acceptable;
+		// either way it must not report open.
+		if st.IsOpen("svc") {
+			t.Errorf("recreated svc must start closed")
+		}
+	}
+}
+
+func TestPurgeAbsent_KeepsLiveServices(t *testing.T) {
+	st, err := New(filepath.Join(t.TempDir(), "state.json"), []string{"svc"}, newFakeClock(time.Now()))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := st.Open("svc", 0, "tester"); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := st.AddPass(Pass{ID: "p1", Service: "svc"}); err != nil {
+		t.Fatalf("AddPass: %v", err)
+	}
+
+	if err := st.PurgeAbsent(map[string]bool{"svc": true}, map[string]bool{"svc": true}); err != nil {
+		t.Fatalf("PurgeAbsent: %v", err)
+	}
+
+	if !st.IsOpen("svc") {
+		t.Errorf("expected svc to stay open when still live")
+	}
+	if !st.IsPassValid("p1", "svc") {
+		t.Errorf("expected pass to survive when service is still live")
+	}
+}
+
 func TestEvents_RingBufferCap(t *testing.T) {
 	st, err := New(filepath.Join(t.TempDir(), "state.json"), []string{"svc"}, newFakeClock(time.Now()))
 	if err != nil {

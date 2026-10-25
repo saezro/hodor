@@ -285,6 +285,44 @@ func (s *Store) Close(name string) error {
 	return err
 }
 
+// PurgeAbsent removes any service/group open-state entry not in
+// liveStateKeys, and any pass whose Service is not in
+// liveServiceNames, then persists the change. Called after a config
+// swap (see internal/config.Live.OnSwap) so a service removed from the
+// config - by DeleteService or a reload/save that drops it - loses its
+// open/expiry state and every device pass for it; recreating a service
+// under the same name later therefore starts closed and pass-less,
+// instead of inheriting whatever an old, differently-configured
+// service of that name left behind.
+func (s *Store) PurgeAbsent(liveStateKeys, liveServiceNames map[string]bool) error {
+	s.mu.Lock()
+	changed := false
+	for key := range s.d.Services {
+		if !liveStateKeys[key] {
+			delete(s.d.Services, key)
+			s.appendEventLocked("purged:" + key)
+			changed = true
+		}
+	}
+	for id, p := range s.d.Passes {
+		if !liveServiceNames[p.Service] {
+			delete(s.d.Passes, id)
+			s.appendEventLocked("pass purged: " + id)
+			changed = true
+		}
+	}
+	if !changed {
+		s.mu.Unlock()
+		return nil
+	}
+	err := s.saveLocked()
+	s.mu.Unlock()
+	if err == nil {
+		s.notify("purged")
+	}
+	return err
+}
+
 // Events returns a snapshot of the event ring buffer, most recent last.
 func (s *Store) Events() []Event {
 	s.mu.Lock()
