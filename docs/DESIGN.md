@@ -63,3 +63,26 @@ cmd/hodor/main.go · internal/{config,state,proxy,auth,pass,pin,admin,web,i18n} 
 
 ## Tests
 Table tests: config validation, state timers (fake clock), HMAC pass sign/verify/revoke, PIN flow, Host routing, CIDR check, WebSocket proxied end-to-end (httptest), forwardauth decisions.
+
+## Phase 2 — scoped API keys, embeddable button, panel config editing (requested 2026-10-25)
+Goal: a custom button inside each service (or a home dashboard) opens/closes it without visiting the hodor panel. Still LAN/VPN only: every endpoint stays on the admin listener behind `admin.allow_cidrs`; nothing new on the public listener.
+
+### 2a. Scoped API keys
+- `api_keys` (in overlay, see 2c): `{id, name, services: [svc|group…], actions: [open, close, status], allow_origins: [https://geo.lan…], created_at}`. Key = 32 random bytes, shown ONCE on creation; only sha256 stored. Constant-time compare.
+- Endpoints (versioned, keep current `/api/*` for the panel): `GET /api/v1/services/{name}` · `POST /api/v1/services/{name}/open {for}` · `POST /api/v1/services/{name}/close`. Auth `Authorization: Bearer <key>`; key must cover service+action, else 403. `admin.token` (global) still works for everything.
+- CORS only for bearer requests: `Access-Control-Allow-Origin` echoed iff Origin ∈ key.allow_origins (no `*`), `OPTIONS` preflight, `Vary: Origin`. Bearer requests skip CSRF (already the rule).
+- Rate limit per key; events log records key name as `opened_by`.
+
+### 2b. Embeddable button
+- `GET /embed.js` (static, embedded): `<script src="https://hodor.lan/embed.js" data-service="geo" data-key="…" defer></script>` renders a small open/close button + countdown into `<hodor-button>` or after the script tag; shadow DOM, dark theme tokens, i18n via `data-lang`.
+- `GET /embed/{svc}?k=<key>` iframe alternative; `Content-Security-Policy: frame-ancestors` = key.allow_origins.
+- README snippet + docs/embed.md. Note: key is visible in page source to LAN viewers → scope keys narrowly.
+
+### 2c. Panel config editing + hot reload
+- Base `hodor.yaml` stays hand-owned, never rewritten. Panel edits go to overlay `config_overlay` (default `<dir of state_file>/managed.yaml`, 0600): services added/edited from panel, durations, api_keys. Merge: overlay service with same `name` replaces base one; base services marked read-only in panel.
+- Save = validate merged config → atomic write (tmp+rename) → swap live config (`atomic.Pointer`), rebuild host routing. Invalid → 400 with field errors, nothing changes.
+- Reload also on `SIGHUP` and `POST /api/config/reload` (re-reads base + overlay). Listen addresses, secret and state_file are NOT hot-reloadable (log warning, need restart).
+- Panel: "Settings" tab — services CRUD, durations, API keys (create shows key once + copy-paste snippet, revoke).
+
+### Tests
+Key scope matrix (svc/group × action), CORS allow/deny/preflight, overlay merge, invalid save leaves config untouched, concurrent reload under `-race`, embed.js served with correct headers.
