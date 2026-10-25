@@ -68,6 +68,7 @@ type Public struct {
 type OnDeny string
 
 const (
+	// OnDenyRedirect redirects denied requests to the closed page.
 	OnDenyRedirect OnDeny = "redirect"
 	OnDeny401      OnDeny = "401"
 )
@@ -95,6 +96,7 @@ type ServiceAuth struct {
 }
 
 const (
+	// ModeProxy reverse-proxies the service through hodor.
 	ModeProxy       = "proxy"
 	ModeForwardAuth = "forwardauth"
 )
@@ -112,7 +114,7 @@ var defaultCIDRs = []string{
 
 // Load reads and parses the YAML file at path, then validates it.
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path comes from this process's own config, not request input
 	if err != nil {
 		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}

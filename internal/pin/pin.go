@@ -17,7 +17,21 @@ import (
 // ErrNotFound is returned by Approve when no pending PIN matches code.
 var ErrNotFound = errors.New("pin: no matching pending PIN")
 
+// ErrAmbiguous is returned by Approve when code matches more than one
+// pending PIN, so approving it could approve the wrong device.
+var ErrAmbiguous = errors.New("pin: code matches more than one pending PIN")
+
+// errCodeExhausted is an internal sentinel for when Create cannot find a
+// code that is not already in use among pending, non-expired entries
+// after maxCodeAttempts tries.
+var errCodeExhausted = errors.New("pin: could not generate a unique code")
+
 const ttl = 10 * time.Minute
+
+// maxCodeAttempts bounds retries when Create regenerates a colliding
+// code; with a 6-digit space and few pending PINs at once, collisions
+// are rare enough that this is effectively never hit in practice.
+const maxCodeAttempts = 20
 
 // Clock abstracts time.Now for tests.
 type Clock interface{ Now() time.Time }
@@ -55,18 +69,35 @@ func New(clock Clock) *Manager {
 }
 
 // Create generates a new pending PIN for service and returns its entry.
+// The code is regenerated until it is unique among currently pending,
+// non-expired entries (a collision would otherwise make Approve
+// ambiguous about which device to approve).
 func (m *Manager) Create(service string) (*Entry, error) {
 	sid, err := randomHex(16)
 	if err != nil {
 		return nil, err
 	}
-	code, err := randomCode()
-	if err != nil {
-		return nil, err
-	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := m.clock.Now()
+	m.gcLocked(now)
+
+	var code string
+	for attempt := 0; ; attempt++ {
+		c, err := randomCode()
+		if err != nil {
+			return nil, err
+		}
+		if !m.codeInUseLocked(c, now) {
+			code = c
+			break
+		}
+		if attempt+1 >= maxCodeAttempts {
+			return nil, errCodeExhausted
+		}
+	}
+
 	e := &Entry{
 		SessionID: sid,
 		Code:      code,
@@ -108,25 +139,56 @@ func (m *Manager) Pending() []Entry {
 }
 
 // Approve marks the pending PIN matching code as approved and returns
-// its entry. Code comparison is constant-time. Brute-force protection
-// against repeated wrong codes is the caller's responsibility (see
+// its entry. Code comparison is constant-time. If code matches more
+// than one pending entry (which Create's uniqueness check should make
+// exceedingly rare, but two entries could still collide if one expires
+// and is GC'd between checks, or under a bug), Approve refuses to guess
+// which device to approve and returns ErrAmbiguous rather than
+// approving an arbitrary one of them. Brute-force protection against
+// repeated wrong codes is the caller's responsibility (see
 // auth.RateLimiter, applied per client IP in the admin handler).
 func (m *Manager) Approve(code string) (Entry, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := m.clock.Now()
 
+	var match *Entry
+	ambiguous := false
 	for _, e := range m.byID {
 		if e.expired(now) || e.Approved {
 			continue
 		}
 		if subtle.ConstantTimeCompare([]byte(e.Code), []byte(code)) == 1 {
-			e.Approved = true
-			return *e, nil
+			if match != nil {
+				ambiguous = true
+				continue
+			}
+			match = e
 		}
 	}
 
-	return Entry{}, ErrNotFound
+	if ambiguous {
+		return Entry{}, ErrAmbiguous
+	}
+	if match == nil {
+		return Entry{}, ErrNotFound
+	}
+	match.Approved = true
+	return *match, nil
+}
+
+// codeInUseLocked reports whether code is already used by a pending,
+// non-expired entry. Caller must hold m.mu.
+func (m *Manager) codeInUseLocked(code string, now time.Time) bool {
+	for _, e := range m.byID {
+		if e.expired(now) || e.Approved {
+			continue
+		}
+		if e.Code == code {
+			return true
+		}
+	}
+	return false
 }
 
 // Consume removes sessionID so a later poll sees it as gone (used once a

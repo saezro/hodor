@@ -100,9 +100,22 @@ func RenderTV(w io.Writer, d TVData) error {
 	return tmpl.ExecuteTemplate(w, "tv.html", d)
 }
 
-// PanelStrings holds the translated strings used by panel.html.
+// PanelStrings holds the translated strings used by panel.html. The
+// skeleton/empty/error/action strings rendered dynamically by panel.js
+// (service rows, PIN rows, toasts) are translated client-side instead —
+// see the STR dict in panel.js — since they depend on data not known at
+// render time.
 type PanelStrings struct {
-	Title string
+	Title        string
+	NavLabel     string
+	TabServices  string
+	TabPins      string
+	TabPasses    string
+	TabEvents    string
+	HintServices string
+	HintPins     string
+	HintPasses   string
+	HintEvents   string
 }
 
 // PanelData is the view model for panel.html.
@@ -123,7 +136,16 @@ func NewPanelData(lang i18n.Lang, csrfToken string, durations []string) PanelDat
 		CSRFToken: csrfToken,
 		Durations: durations,
 		Strings: PanelStrings{
-			Title: i18n.T(lang, "panel.title"),
+			Title:        i18n.T(lang, "panel.title"),
+			NavLabel:     i18n.T(lang, "panel.nav_label"),
+			TabServices:  i18n.T(lang, "panel.tab.services"),
+			TabPins:      i18n.T(lang, "panel.tab.pins"),
+			TabPasses:    i18n.T(lang, "panel.tab.passes"),
+			TabEvents:    i18n.T(lang, "panel.tab.events"),
+			HintServices: i18n.T(lang, "panel.hint.services"),
+			HintPins:     i18n.T(lang, "panel.hint.pins"),
+			HintPasses:   i18n.T(lang, "panel.hint.passes"),
+			HintEvents:   i18n.T(lang, "panel.hint.events"),
 		},
 	}
 }

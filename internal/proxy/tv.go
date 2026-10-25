@@ -3,8 +3,23 @@ package proxy
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
+	"github.com/saezro/hodor/internal/auth"
 	"github.com/saezro/hodor/internal/web"
+)
+
+// tvPinLimit bounds how many PINs a single client IP may request from
+// GET /tv. Without this, anyone who can reach the public listener could
+// flood the admin panel's pending-PIN list (and chew through the
+// 6-digit code space) just by repeatedly loading the page. Package-level
+// since Server's fields live in proxy.go; keyed per client IP like the
+// admin-side approve limiter in internal/admin/server.go.
+var tvPinLimit = auth.NewRateLimiter(tvPinLimitCount, tvPinLimitWindow)
+
+const (
+	tvPinLimitCount  = 10
+	tvPinLimitWindow = time.Minute
 )
 
 // handleTV serves GET /tv: the device-pairing page for keyboard-less
@@ -14,6 +29,16 @@ func (s *Server) handleTV(w http.ResponseWriter, r *http.Request) {
 	svc := s.lookupHost(r.Host)
 	if svc == nil {
 		http.NotFound(w, r)
+		return
+	}
+
+	ip := auth.ClientIP(r, s.cfg.Public.ParsedProxies, "X-Forwarded-For")
+	key := ""
+	if ip != nil {
+		key = ip.String()
+	}
+	if !tvPinLimit.Allow(key) {
+		http.Error(w, "too many pin requests", http.StatusTooManyRequests)
 		return
 	}
 

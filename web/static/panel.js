@@ -13,23 +13,27 @@
   var STR = {
     en: {
       open: "Open", closed: "Closed", openFor: "Open", close: "Close",
-      until: "until", forever: "no timer", by: "by",
+      until: "until", forever: "no timer", by: "by", group: "group",
       noServices: "No services configured.", noPins: "No pending PINs.",
       noPasses: "No device passes yet.", noEvents: "No events yet.",
       approve: "Approve", revoke: "Revoke", revoked: "revoked",
-      opened: "opened", wasClosed: "closed", approved: "approved",
+      opened: "opened", wasClosed: "closed", expired: "closed (expired)", approved: "approved",
       failed: "Something went wrong.", offline: "offline",
-      confirmRevoke: "Revoke this pass? The device will be signed out."
+      confirmRevoke: "Revoke this pass? The device will be signed out.",
+      pinCodeLabel: "PIN code", durationLabel: "Duration",
+      created: "created", expires: "expires", since: "since"
     },
     es: {
       open: "Abierto", closed: "Cerrado", openFor: "Abrir", close: "Cerrar",
-      until: "hasta", forever: "sin límite", by: "por",
+      until: "hasta", forever: "sin límite", by: "por", group: "grupo",
       noServices: "No hay servicios configurados.", noPins: "No hay PINs pendientes.",
       noPasses: "Aún no hay pases de dispositivo.", noEvents: "Aún no hay eventos.",
       approve: "Aprobar", revoke: "Revocar", revoked: "revocado",
-      opened: "abierto", wasClosed: "cerrado", approved: "aprobado",
+      opened: "abierto", wasClosed: "cerrado", expired: "cerrado (caducado)", approved: "aprobado",
       failed: "Algo ha ido mal.", offline: "sin conexión",
-      confirmRevoke: "¿Revocar este pase? El dispositivo quedará desconectado."
+      confirmRevoke: "¿Revocar este pase? El dispositivo quedará desconectado.",
+      pinCodeLabel: "Código PIN", durationLabel: "Duración",
+      created: "creado", expires: "caduca", since: "desde"
     }
   }[LANG];
 
@@ -102,9 +106,9 @@
     services.forEach(function (svc) {
       var meta = svc.open
         ? (svc.until ? STR.until + " " + fmtTime(svc.until) : STR.forever) + (svc.opened_by ? " · " + STR.by + " " + svc.opened_by : "")
-        : (svc.group ? "group: " + svc.group : svc.mode);
+        : (svc.group ? STR.group + ": " + svc.group : svc.mode);
 
-      var durSelect = el("select", { "aria-label": "Duration" }, DURATIONS.map(function (d) {
+      var durSelect = el("select", { "aria-label": STR.durationLabel }, DURATIONS.map(function (d) {
         return el("option", { value: d, text: d });
       }));
 
@@ -162,7 +166,7 @@
       // and types it here to approve that specific pairing.
       var codeInput = el("input", {
         type: "text", inputmode: "numeric", pattern: "[0-9]{6}", maxlength: "6",
-        placeholder: "••••••", class: "pin-code", "aria-label": "PIN code"
+        placeholder: "000000", class: "pin-code", "aria-label": STR.pinCodeLabel
       });
       var approveBtn = el("button", { class: "primary", type: "button", text: STR.approve });
       approveBtn.addEventListener("click", function () {
@@ -177,7 +181,7 @@
       var row = el("div", { class: "row" }, [
         el("div", { class: "row-main" }, [
           el("span", { class: "name", text: p.service }),
-          el("span", { class: "meta", text: "created " + fmtTime(p.created_at) + " · expires " + fmtTime(p.expires_at) })
+          el("span", { class: "meta", text: STR.created + " " + fmtTime(p.created_at) + " · " + STR.expires + " " + fmtTime(p.expires_at) })
         ]),
         el("div", { class: "actions" }, [codeInput, approveBtn])
       ]);
@@ -213,7 +217,7 @@
       var row = el("div", { class: "row" }, [
         el("div", { class: "row-main" }, [
           el("span", { class: "name", text: p.label || p.service }),
-          el("span", { class: "meta", text: p.service + " · since " + fmtTime(p.created_at) })
+          el("span", { class: "meta", text: p.service + " · " + STR.since + " " + fmtTime(p.created_at) })
         ]),
         el("span", { class: "badge " + (p.revoked ? "revoked" : "open"), text: p.revoked ? STR.revoked : STR.open }),
         el("div", { class: "actions" }, [revokeBtn])
@@ -228,6 +232,27 @@
 
   // ---- Events -----------------------------------------------------------
 
+  // The server logs events as a stable "type:service[:extra]" key (see
+  // internal/state/state.go appendEventLocked callers) so this is the only
+  // place that needs to know how to phrase them per language. Anything not
+  // matching the known types (e.g. a message persisted by an older build)
+  // is shown as-is rather than dropped.
+  function formatEvent(message) {
+    var parts = (message || "").split(":");
+    var svc = parts[1];
+    switch (parts[0]) {
+      case "opened":
+        var by = parts.slice(2).join(":");
+        return svc + " — " + STR.opened + (by ? " " + STR.by + " " + by : "");
+      case "closed":
+        return svc + " — " + STR.wasClosed;
+      case "expired":
+        return svc + " — " + STR.expired;
+      default:
+        return message;
+    }
+  }
+
   function renderEvents(events) {
     var list = document.getElementById("events-list");
     list.setAttribute("aria-busy", "false");
@@ -239,7 +264,7 @@
     events.slice().reverse().forEach(function (e) {
       var row = el("div", { class: "row event-row" }, [
         el("span", { class: "event-time", text: fmtTime(e.time) }),
-        el("span", { class: "event-msg", text: e.message })
+        el("span", { class: "event-msg", text: formatEvent(e.message) })
       ]);
       list.appendChild(row);
     });
@@ -259,6 +284,36 @@
     loadPasses();
     loadEvents();
   }
+
+  // ---- Tabs: show one .panel-section at a time, driven by the tab
+  // links' hash so it's bookmarkable/back-button-friendly. No tab
+  // framework, just toggling `hidden` + the active link class.
+
+  var TAB_IDS = ["services", "pins", "passes", "events"];
+
+  function showTab(id) {
+    if (TAB_IDS.indexOf(id) === -1) id = TAB_IDS[0];
+    TAB_IDS.forEach(function (tid) {
+      document.getElementById(tid).hidden = tid !== id;
+    });
+    document.querySelectorAll(".tab-link").forEach(function (link) {
+      var active = link.getAttribute("data-tab") === id;
+      link.classList.toggle("is-active", active);
+      if (active) link.setAttribute("aria-current", "true");
+      else link.removeAttribute("aria-current");
+    });
+  }
+
+  document.querySelectorAll(".tab-link").forEach(function (link) {
+    link.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      var id = link.getAttribute("data-tab");
+      showTab(id);
+      history.replaceState(null, "", "#" + id);
+    });
+  });
+
+  showTab((location.hash || "").slice(1));
 
   loadAll();
   setInterval(loadAll, 5000);

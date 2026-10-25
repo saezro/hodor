@@ -207,6 +207,7 @@ func TestWebSocket_EndToEndThroughProxy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read handshake response: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("handshake status = %d, want 101", resp.StatusCode)
 	}

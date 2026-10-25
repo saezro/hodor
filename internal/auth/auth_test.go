@@ -58,6 +58,40 @@ func TestClientIP_TrustedProxy_UsesHeader(t *testing.T) {
 	}
 }
 
+func TestClientIP_TrustedProxy_ClientSpoofedPrefix_UsesRightmostUntrusted(t *testing.T) {
+	trusted := parseCIDRs(t, "10.0.0.0/8")
+	r := &http.Request{RemoteAddr: "10.0.0.1:1234", Header: http.Header{}}
+	// The client injects a fake leading entry; the trusted proxy appends
+	// the real client IP as the last hop.
+	r.Header.Set("X-Forwarded-For", "1.2.3.4, 203.0.113.42")
+	ip := ClientIP(r, trusted, "X-Forwarded-For")
+	if ip == nil || ip.String() != "203.0.113.42" {
+		t.Errorf("ClientIP() = %v, want 203.0.113.42 (rightmost untrusted entry, spoofed prefix ignored)", ip)
+	}
+}
+
+func TestClientIP_TrustedProxy_TwoHops_SkipsBothTrustedProxies(t *testing.T) {
+	trusted := parseCIDRs(t, "10.0.0.0/8")
+	r := &http.Request{RemoteAddr: "10.0.0.2:1234", Header: http.Header{}}
+	// attacker-injected, real client, proxy1 (trusted) -- RemoteAddr is
+	// proxy2 (trusted), the direct peer.
+	r.Header.Set("X-Forwarded-For", "9.9.9.9, 203.0.113.9, 10.0.0.1")
+	ip := ClientIP(r, trusted, "X-Forwarded-For")
+	if ip == nil || ip.String() != "203.0.113.9" {
+		t.Errorf("ClientIP() = %v, want 203.0.113.9 (walk back past both trusted hops)", ip)
+	}
+}
+
+func TestClientIP_TrustedProxy_AllHopsTrusted_FallsBackToLeftmost(t *testing.T) {
+	trusted := parseCIDRs(t, "10.0.0.0/8")
+	r := &http.Request{RemoteAddr: "10.0.0.2:1234", Header: http.Header{}}
+	r.Header.Set("X-Forwarded-For", "10.0.0.3, 10.0.0.1")
+	ip := ClientIP(r, trusted, "X-Forwarded-For")
+	if ip == nil || ip.String() != "10.0.0.3" {
+		t.Errorf("ClientIP() = %v, want 10.0.0.3 (leftmost when every hop is a trusted proxy)", ip)
+	}
+}
+
 func TestClientIP_TrustedProxy_EmptyHeader_FallsBackToRemote(t *testing.T) {
 	trusted := parseCIDRs(t, "10.0.0.0/8")
 	r := &http.Request{RemoteAddr: "10.0.0.1:1234", Header: http.Header{}}

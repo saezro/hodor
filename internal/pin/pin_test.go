@@ -113,6 +113,62 @@ func TestApprove_WrongCodeAlwaysNotFound(t *testing.T) {
 	}
 }
 
+func TestCreate_RegeneratesOnCollision(t *testing.T) {
+	// Force every random code draw to collide for a while by exhausting
+	// the attempt budget isn't directly testable without hooking the
+	// RNG, so instead we check the documented guarantee black-box: after
+	// creating many pending PINs at once (well under the 1e6 code
+	// space), no two of them share a code.
+	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	m := New(clock)
+
+	const n = 50
+	seen := make(map[string]bool, n)
+	for i := 0; i < n; i++ {
+		e, err := m.Create("svc")
+		if err != nil {
+			t.Fatalf("Create #%d: %v", i, err)
+		}
+		if seen[e.Code] {
+			t.Fatalf("Create produced duplicate code %q among %d pending PINs", e.Code, n)
+		}
+		seen[e.Code] = true
+	}
+}
+
+func TestApprove_AmbiguousCodeRejected(t *testing.T) {
+	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	m := New(clock)
+
+	a, err := m.Create("svc-a")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	b, err := m.Create("svc-b")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Force a collision directly on the internal map: Create's own
+	// uniqueness check prevents this from happening naturally, so this
+	// simulates the one case Approve itself still has to defend against.
+	m.mu.Lock()
+	m.byID[b.SessionID].Code = a.Code
+	m.mu.Unlock()
+
+	if _, err := m.Approve(a.Code); err != ErrAmbiguous {
+		t.Errorf("Approve(colliding code) err = %v, want ErrAmbiguous", err)
+	}
+
+	// Neither entry should have been approved as a side effect.
+	if got, ok := m.Get(a.SessionID); !ok || got.Approved {
+		t.Errorf("Approve should not approve either colliding entry; a.Approved = %v", got.Approved)
+	}
+	if got, ok := m.Get(b.SessionID); !ok || got.Approved {
+		t.Errorf("Approve should not approve either colliding entry; b.Approved = %v", got.Approved)
+	}
+}
+
 func TestConsume_RemovesEntry(t *testing.T) {
 	m := New(&fakeClock{t: time.Now()})
 	e, err := m.Create("svc")

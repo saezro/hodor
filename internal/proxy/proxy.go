@@ -146,7 +146,7 @@ func (s *Server) issuePass(w http.ResponseWriter, r *http.Request, svc *config.S
 		return err
 	}
 	token := pass.Issue(s.secret, id, svc.Name, expiry)
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly/Secure/SameSite are all set below
 		Name:     pass.CookieName(svc.Name),
 		Value:    token,
 		Path:     "/",
@@ -178,6 +178,7 @@ func (s *Server) cookieSecure(r *http.Request) bool {
 func newReverseProxy(upstream *url.URL) *httputil.ReverseProxy {
 	rp := httputil.NewSingleHostReverseProxy(upstream)
 	rp.FlushInterval = -1 // SSE/streaming flush-through.
+	//nolint:staticcheck // Director (not Rewrite) keeps this a minimal wrap of the stdlib default; revisit if ReverseProxy.Rewrite is adopted more broadly here.
 	origDirector := rp.Director
 	rp.Director = func(r *http.Request) {
 		stripHodorCookies(r)

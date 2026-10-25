@@ -16,6 +16,7 @@ type Clock interface {
 // RealClock is the production Clock backed by time.Now.
 type RealClock struct{}
 
+// Now returns the current wall-clock time.
 func (RealClock) Now() time.Time { return time.Now() }
 
 // ServiceState is the persisted open/closed status of one service.
@@ -121,6 +122,11 @@ func (s *Store) notify(msg string) {
 	}
 }
 
+// appendEventLocked records msg to the event log. msg is a stable
+// "type:service[:extra]" key (e.g. "opened:geo:127.0.0.1", "closed:geo",
+// "expired:geo"), not pre-translated prose: the admin panel (panel.js)
+// parses the type and phrases it in the current UI language. Caller must
+// hold s.mu.
 func (s *Store) appendEventLocked(msg string) {
 	s.d.Events = append(s.d.Events, Event{Time: s.clock.Now(), Message: msg})
 	if len(s.d.Events) > maxEvents {
@@ -151,7 +157,7 @@ func (s *Store) isOpenLocked(name string) (open, expired bool) {
 	}
 	if st.isExpired(s.clock.Now()) {
 		s.d.Services[name] = ServiceState{Open: false}
-		s.appendEventLocked("close " + name + " (expired)")
+		s.appendEventLocked("expired:" + name)
 		_ = s.saveLocked()
 		return false, true
 	}
@@ -257,7 +263,7 @@ func (s *Store) Open(name string, duration time.Duration, openedBy string) error
 		until = s.clock.Now().Add(duration)
 	}
 	s.d.Services[name] = ServiceState{Open: true, Until: until, OpenedBy: openedBy}
-	s.appendEventLocked("open " + name + " by " + openedBy)
+	s.appendEventLocked("opened:" + name + ":" + openedBy)
 	err := s.saveLocked()
 	s.mu.Unlock()
 	if err == nil {
@@ -270,7 +276,7 @@ func (s *Store) Open(name string, duration time.Duration, openedBy string) error
 func (s *Store) Close(name string) error {
 	s.mu.Lock()
 	s.d.Services[name] = ServiceState{Open: false}
-	s.appendEventLocked("close " + name)
+	s.appendEventLocked("closed:" + name)
 	err := s.saveLocked()
 	s.mu.Unlock()
 	if err == nil {

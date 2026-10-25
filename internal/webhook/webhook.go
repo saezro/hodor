@@ -61,5 +61,5 @@ func send(client *http.Client, url, msg string, logger *slog.Logger) {
 		return
 	}
 	_, _ = io.Copy(io.Discard, resp.Body) // drain before Close, keeps the connection reusable
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }

@@ -8,6 +8,7 @@ package i18n
 type Lang string
 
 const (
+	// EN is English.
 	EN Lang = "en"
 	ES Lang = "es"
 )
@@ -47,6 +48,42 @@ var strings = map[string]map[Lang]string{
 	"panel.title": {
 		EN: "hodor — admin panel",
 		ES: "hodor — panel de administración",
+	},
+	"panel.nav_label": {
+		EN: "Sections",
+		ES: "Secciones",
+	},
+	"panel.tab.services": {
+		EN: "Services",
+		ES: "Servicios",
+	},
+	"panel.tab.pins": {
+		EN: "Pending PINs",
+		ES: "PINs pendientes",
+	},
+	"panel.tab.passes": {
+		EN: "Passes",
+		ES: "Pases",
+	},
+	"panel.tab.events": {
+		EN: "Log",
+		ES: "Registro",
+	},
+	"panel.hint.services": {
+		EN: "Open for a while, or close right away.",
+		ES: "Ábrelo durante un rato, o ciérralo ya.",
+	},
+	"panel.hint.pins": {
+		EN: "A TV screen is waiting to be paired.",
+		ES: "Hay una pantalla esperando para emparejarse.",
+	},
+	"panel.hint.passes": {
+		EN: "Long-lived grants; revoke one to sign that device out.",
+		ES: "Accesos de larga duración; revoca uno para desconectar ese dispositivo.",
+	},
+	"panel.hint.events": {
+		EN: "Last 200 changes, most recent first.",
+		ES: "Últimos 200 cambios, el más reciente primero.",
 	},
 }
 

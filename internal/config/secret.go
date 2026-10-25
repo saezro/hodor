@@ -12,7 +12,7 @@ import (
 // random 32-byte secret (base64-encoded, file mode 0600) on first run if
 // the file does not exist yet.
 func loadOrCreateSecret(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path comes from this process's own config, not request input
 	if err == nil {
 		if len(data) < 32 {
 			return nil, fmt.Errorf("secret_file %s: too short (want >= 32 bytes, got %d)", path, len(data))

@@ -68,5 +68,5 @@ func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
 
 	// host was just resolved to a configured service above, so this
 	// redirect target is never attacker-controlled.
-	http.Redirect(w, r, proto+"://"+host+"/.hodor/closed", http.StatusFound)
+	http.Redirect(w, r, proto+"://"+host+"/.hodor/closed", http.StatusFound) // #nosec G710 -- host/proto come from a service already resolved above, never attacker input
 }
