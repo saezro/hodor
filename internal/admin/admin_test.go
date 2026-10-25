@@ -53,7 +53,7 @@ func newTestServer(t *testing.T, cfg *config.Config) (*Server, *state.Store, *pi
 		t.Fatalf("state.New: %v", err)
 	}
 	pins := pin.New(nil)
-	srv, err := New(cfg, st, pins, []byte("test-secret"), nil)
+	srv, err := New(config.NewLiveFrom(cfg), st, pins, []byte("test-secret"), nil)
 	if err != nil {
 		t.Fatalf("admin.New: %v", err)
 	}

@@ -98,6 +98,8 @@ services:
 
 Validate it anytime with `hodor check -c hodor.yaml`.
 
+Services, durations and API keys added from the admin panel aren't written back into `hodor.yaml`: they live in a separate `config_overlay` file (default `managed.yaml` next to `state_file`), merged on top of the base config at every request. `hodor.yaml` stays hand-owned and is never rewritten. `listen`, `secret_file` and `state_file` only ever come from the base file and are not hot-reloadable; everything else picks up changes immediately via a panel save, `SIGHUP`, or `POST /api/config/reload`.
+
 ## API keys
 
 For a custom button or dashboard that opens/closes a service without visiting the panel, mint a scoped key:

@@ -180,10 +180,11 @@ func cmdServe(args []string) error {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(logger)
 
-	cfg, err := config.Load(*path)
+	live, err := config.NewLive(*path)
 	if err != nil {
 		return err
 	}
+	cfg := live.Get()
 	secret, err := cfg.Secret()
 	if err != nil {
 		return fmt.Errorf("secret: %w", err)
@@ -203,17 +204,44 @@ func cmdServe(args []string) error {
 
 	pins := pin.New(nil)
 
-	publicSrv, err := proxy.New(cfg, st, pins, secret, logger)
+	publicSrv, err := proxy.New(live, st, pins, secret, logger)
 	if err != nil {
 		return fmt.Errorf("proxy: %w", err)
 	}
-	adminSrv, err := admin.New(cfg, st, pins, secret, logger)
+	adminSrv, err := admin.New(live, st, pins, secret, logger)
 	if err != nil {
 		return fmt.Errorf("admin: %w", err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// SIGHUP re-reads base + overlay from disk (same as POST
+	// /api/config/reload); listen/secret_file/state_file stay as they
+	// are, with a warning, since the listeners/secret/state store
+	// below are already running against the old values (see
+	// internal/config.Live.Reload).
+	sighup := make(chan os.Signal, 1)
+	signal.Notify(sighup, syscall.SIGHUP)
+	defer signal.Stop(sighup)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-sighup:
+				warnings, err := live.Reload()
+				if err != nil {
+					logger.Error("config reload failed", "err", err)
+					continue
+				}
+				for _, w := range warnings {
+					logger.Warn("config reload warning", "warning", w)
+				}
+				logger.Info("config reloaded")
+			}
+		}
+	}()
 
 	httpPublic := &http.Server{Addr: cfg.Listen.Public, Handler: publicSrv, ReadHeaderTimeout: 10 * time.Second}
 	httpAdmin := &http.Server{Addr: cfg.Listen.Admin, Handler: adminSrv, ReadHeaderTimeout: 10 * time.Second}

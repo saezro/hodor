@@ -111,6 +111,41 @@ func TestValidate_Table(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "proxy mode with malformed upstream",
+			mutate: func(c *Config) {
+				c.Services[0].Upstream = "http://[::1"
+			},
+			wantErr: true,
+		},
+		{
+			name: "proxy mode with upstream missing scheme",
+			mutate: func(c *Config) {
+				c.Services[0].Upstream = "127.0.0.1:9000"
+			},
+			wantErr: true,
+		},
+		{
+			name: "proxy mode with upstream invalid scheme",
+			mutate: func(c *Config) {
+				c.Services[0].Upstream = "ftp://127.0.0.1:9000"
+			},
+			wantErr: true,
+		},
+		{
+			name: "proxy mode with upstream missing host",
+			mutate: func(c *Config) {
+				c.Services[0].Upstream = "http://"
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid service name",
+			mutate: func(c *Config) {
+				c.Services[0].Name = "svc with spaces"
+			},
+			wantErr: true,
+		},
+		{
 			name: "forwardauth mode without upstream is fine",
 			mutate: func(c *Config) {
 				c.Services[0].Mode = ModeForwardAuth

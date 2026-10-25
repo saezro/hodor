@@ -49,7 +49,7 @@ func newProxyTestServer(t *testing.T, cfg *config.Config) (*Server, *state.Store
 	if err != nil {
 		t.Fatalf("state.New: %v", err)
 	}
-	srv, err := New(cfg, st, pin.New(nil), []byte("test-secret"), nil)
+	srv, err := New(config.NewLiveFrom(cfg), st, pin.New(nil), []byte("test-secret"), nil)
 	if err != nil {
 		t.Fatalf("proxy.New: %v", err)
 	}

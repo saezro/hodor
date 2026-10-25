@@ -12,8 +12,8 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 
 	_, _ = fmt.Fprintln(w, "# HELP hodor_service_open 1 if the service (or its group) is currently open")
 	_, _ = fmt.Fprintln(w, "# TYPE hodor_service_open gauge")
-	for i := range s.cfg.Services {
-		svc := &s.cfg.Services[i]
+	for i := range s.cfg().Services {
+		svc := &s.cfg().Services[i]
 		v := 0
 		if s.state.IsOpen(stateKey(svc)) {
 			v = 1

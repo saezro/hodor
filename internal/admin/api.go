@@ -26,13 +26,13 @@ func stateKey(svc *config.Service) string {
 // resolveKey resolves a CLI/API argument that may be a service name or a
 // group name to the state-store key to act on.
 func (s *Server) resolveKey(name string) (string, bool) {
-	for i := range s.cfg.Services {
-		if s.cfg.Services[i].Name == name {
-			return stateKey(&s.cfg.Services[i]), true
+	for i := range s.cfg().Services {
+		if s.cfg().Services[i].Name == name {
+			return stateKey(&s.cfg().Services[i]), true
 		}
 	}
-	for i := range s.cfg.Services {
-		if s.cfg.Services[i].Group == name {
+	for i := range s.cfg().Services {
+		if s.cfg().Services[i].Group == name {
 			return name, true
 		}
 	}
@@ -40,9 +40,9 @@ func (s *Server) resolveKey(name string) (string, bool) {
 }
 
 func (s *Server) handleServicesList(w http.ResponseWriter, _ *http.Request) {
-	out := make([]ServiceView, 0, len(s.cfg.Services))
-	for i := range s.cfg.Services {
-		svc := &s.cfg.Services[i]
+	out := make([]ServiceView, 0, len(s.cfg().Services))
+	for i := range s.cfg().Services {
+		svc := &s.cfg().Services[i]
 		st, _ := s.state.Get(stateKey(svc))
 		v := ServiceView{
 			Name:  svc.Name,
@@ -69,7 +69,7 @@ func (s *Server) handleServiceOpen(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "unknown service or group"})
 		return
 	}
-	s.openService(w, r, key, clientLabel(r, s.cfg))
+	s.openService(w, r, key, clientLabel(r, s.cfg()))
 }
 
 func (s *Server) handleServiceClose(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +138,7 @@ func (s *Server) handlePinsList(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handlePinsApprove(w http.ResponseWriter, r *http.Request) {
-	limitKey := clientLabel(r, s.cfg)
+	limitKey := clientLabel(r, s.cfg())
 	if !s.pinLimit.Allow(limitKey) {
 		writeJSON(w, http.StatusTooManyRequests, errorResponse{Error: "too many attempts, try later"})
 		return

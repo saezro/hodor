@@ -28,7 +28,7 @@ func (s *Server) handleEmbed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	k := r.URL.Query().Get("k")
-	key := apikey.Match(s.cfg.APIKeys, k)
+	key := apikey.Match(s.cfg().APIKeys, k)
 	if key == nil || !apikey.Allows(*key, scopeSvc, config.KeyActionStatus) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return

@@ -30,7 +30,7 @@ func (s *Server) handleDefault(w http.ResponseWriter, r *http.Request) {
 			s.renderClosedFor(w, svc)
 			return
 		}
-		rp := s.reverseProxy[svc.Name]
+		rp := s.routingFor(s.cfg()).reverseProxy[svc.Name]
 		if rp == nil {
 			http.Error(w, "no upstream configured", http.StatusBadGateway)
 			return
@@ -55,7 +55,7 @@ func (s *Server) handleClosed(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderClosedFor(w http.ResponseWriter, svc *config.Service) {
-	d := web.NewClosedData(s.lang, svc.Title, svc.Message, svc.AccentColor, svc.LogoURL, s.cfg.Admin.PublicURL)
+	d := web.NewClosedData(s.lang, svc.Title, svc.Message, svc.AccentColor, svc.LogoURL, s.cfg().Admin.PublicURL)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")

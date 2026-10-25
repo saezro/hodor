@@ -1,6 +1,10 @@
 package admin
 
-import "time"
+import (
+	"time"
+
+	"github.com/saezro/hodor/internal/config"
+)
 
 // ServiceView is the JSON shape of one entry in GET /api/services. It is
 // also used by cmd/hodor to decode the response for `hodor status`.
@@ -66,4 +70,59 @@ type CSRFResponse struct {
 // errorResponse is the JSON body returned on API errors.
 type errorResponse struct {
 	Error string `json:"error"`
+}
+
+// validationErrorResponse is the 400 body returned by every
+// /api/config/* write when the resulting config fails validation:
+// one message per offending field, nothing applied (see
+// internal/config.Live.mutateOverlay).
+type validationErrorResponse struct {
+	Errors map[string]string `json:"errors"`
+}
+
+// okResponse is the 200 body for /api/config/* writes that have
+// nothing richer to report back.
+type okResponse struct {
+	OK bool `json:"ok"`
+}
+
+// ConfigGetResponse is the JSON body of GET /api/config: the merged
+// (base + overlay) services/durations/api_keys, plus the on-disk
+// paths backing them (docs/DESIGN.md "2c. Panel config editing + hot
+// reload"). Services and APIKeys carry their own Source field
+// ("base"/"overlay") already; APIKey.Hash never serializes.
+type ConfigGetResponse struct {
+	Services    []config.Service `json:"services"`
+	Durations   []string         `json:"durations"`
+	APIKeys     []config.APIKey  `json:"api_keys"`
+	BasePath    string           `json:"base_path"`
+	OverlayPath string           `json:"overlay_path"`
+}
+
+// ConfigDurationsRequest is the JSON body of PUT /api/config/durations.
+type ConfigDurationsRequest struct {
+	Durations []string `json:"durations"`
+}
+
+// ConfigKeyCreateRequest is the JSON body of POST /api/config/keys.
+type ConfigKeyCreateRequest struct {
+	Name         string   `json:"name"`
+	Services     []string `json:"services"`
+	Actions      []string `json:"actions"`
+	AllowOrigins []string `json:"allow_origins"`
+}
+
+// ConfigKeyCreateResponse is the JSON body of a successful POST
+// /api/config/keys: Key is the raw key, shown this once only (only its
+// hash is ever persisted, same as `hodor key new`).
+type ConfigKeyCreateResponse struct {
+	ID          string `json:"id"`
+	Key         string `json:"key"`
+	YAMLSnippet string `json:"yaml_snippet"`
+}
+
+// ConfigReloadResponse is the JSON body of POST /api/config/reload.
+type ConfigReloadResponse struct {
+	OK       bool     `json:"ok"`
+	Warnings []string `json:"warnings"`
 }

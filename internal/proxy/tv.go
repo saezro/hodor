@@ -50,7 +50,7 @@ func (s *Server) handleTV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := auth.ClientIP(r, s.cfg.Public.ParsedProxies, "X-Forwarded-For")
+	ip := auth.ClientIP(r, s.cfg().Public.ParsedProxies, "X-Forwarded-For")
 	key := ""
 	if ip != nil {
 		key = tvPinLimitKey(ip)

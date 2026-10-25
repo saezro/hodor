@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/saezro/hodor/internal/config"
@@ -19,49 +20,48 @@ import (
 	"github.com/saezro/hodor/internal/state"
 )
 
+// routing is the Host-based lookup tables derived from one Config: it
+// is rebuilt (see buildRouting/routingFor) whenever the live config is
+// swapped by a reload or a panel save, so a hot-reloaded service's
+// host/upstream take effect without a restart.
+type routing struct {
+	cfg           *config.Config
+	hostToService map[string]*config.Service
+	reverseProxy  map[string]*httputil.ReverseProxy
+}
+
 // Server is the public-listener HTTP handler.
 type Server struct {
-	cfg    *config.Config
+	live   *config.Live
 	state  *state.Store
 	pins   *pin.Manager
 	secret []byte
 	lang   i18n.Lang
 	log    *slog.Logger
 
-	hostToService map[string]*config.Service
-	reverseProxy  map[string]*httputil.ReverseProxy
+	routingPtr atomic.Pointer[routing]
 
 	mux *http.ServeMux
 }
 
-// New builds the public-listener handler for cfg.
-func New(cfg *config.Config, st *state.Store, pins *pin.Manager, secret []byte, log *slog.Logger) (*Server, error) {
+// New builds the public-listener handler for live's current config.
+// Every request re-reads live.Get(), so a later reload/save (see
+// internal/config.Live) takes effect immediately, with no restart.
+func New(live *config.Live, st *state.Store, pins *pin.Manager, secret []byte, log *slog.Logger) (*Server, error) {
 	if log == nil {
 		log = slog.Default()
 	}
+	cfg := live.Get()
 	s := &Server{
-		cfg:           cfg,
-		state:         st,
-		pins:          pins,
-		secret:        secret,
-		lang:          i18n.Parse(cfg.Lang),
-		log:           log,
-		hostToService: make(map[string]*config.Service),
-		reverseProxy:  make(map[string]*httputil.ReverseProxy),
+		live:   live,
+		state:  st,
+		pins:   pins,
+		secret: secret,
+		lang:   i18n.Parse(cfg.Lang),
+		log:    log,
 	}
-
-	for i := range cfg.Services {
-		svc := &cfg.Services[i]
-		for _, h := range svc.Hosts {
-			s.hostToService[h] = svc
-		}
-		if svc.Mode == config.ModeProxy {
-			u, err := url.Parse(svc.Upstream)
-			if err != nil {
-				return nil, err
-			}
-			s.reverseProxy[svc.Name] = newReverseProxy(u)
-		}
+	if _, err := s.buildRouting(cfg); err != nil {
+		return nil, err
 	}
 
 	mux := http.NewServeMux()
@@ -76,6 +76,11 @@ func New(cfg *config.Config, st *state.Store, pins *pin.Manager, secret []byte, 
 	return s, nil
 }
 
+// cfg returns the currently active config. Called per request (never
+// cached in a field) so a reload/save is visible to the very next
+// request.
+func (s *Server) cfg() *config.Config { return s.live.Get() }
+
 // ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
@@ -86,13 +91,64 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte("ok"))
 }
 
+// buildRouting derives the Host->Service map and the per-service
+// reverse proxies from cfg and stores them as the current routing
+// table.
+func (s *Server) buildRouting(cfg *config.Config) (*routing, error) {
+	rt := &routing{
+		cfg:           cfg,
+		hostToService: make(map[string]*config.Service),
+		reverseProxy:  make(map[string]*httputil.ReverseProxy),
+	}
+	for i := range cfg.Services {
+		svc := &cfg.Services[i]
+		for _, h := range svc.Hosts {
+			rt.hostToService[h] = svc
+		}
+		if svc.Mode == config.ModeProxy {
+			u, err := url.Parse(svc.Upstream)
+			if err != nil {
+				return nil, err
+			}
+			rt.reverseProxy[svc.Name] = newReverseProxy(u)
+		}
+	}
+	s.routingPtr.Store(rt)
+	return rt, nil
+}
+
+// routingFor returns the routing tables for cfg, rebuilding them if cfg
+// isn't the one they were last built from: a reload or panel save
+// always swaps in a brand new *config.Config value, so pointer identity
+// is enough to detect that host routing needs rebuilding.
+func (s *Server) routingFor(cfg *config.Config) *routing {
+	if rt := s.routingPtr.Load(); rt != nil && rt.cfg == cfg {
+		return rt
+	}
+	rt, err := s.buildRouting(cfg)
+	if err != nil {
+		// cfg was already validated (config.Validate) before it became
+		// live, so this should be unreachable. buildRouting left
+		// routingPtr untouched on this error path, so fail safe by
+		// keeping whatever routing table was already serving traffic
+		// instead of swapping in an empty one (which would 404 every
+		// request until the next successful rebuild).
+		s.log.Error("proxy: rebuild routing failed, keeping previous routing table", "err", err)
+		if prev := s.routingPtr.Load(); prev != nil {
+			return prev
+		}
+		return &routing{cfg: cfg, hostToService: map[string]*config.Service{}, reverseProxy: map[string]*httputil.ReverseProxy{}}
+	}
+	return rt
+}
+
 // lookupHost finds the configured service for a Host header value,
 // stripping any port.
 func (s *Server) lookupHost(host string) *config.Service {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
-	return s.hostToService[host]
+	return s.routingFor(s.cfg()).hostToService[host]
 }
 
 // stateKey returns the state-store key for a service: its group name if
@@ -137,7 +193,7 @@ func (s *Server) issuePass(w http.ResponseWriter, r *http.Request, svc *config.S
 	if err != nil {
 		return err
 	}
-	ttl := s.cfg.ParsedPassTTL
+	ttl := s.cfg().ParsedPassTTL
 	if ttl <= 0 {
 		ttl = 30 * 24 * time.Hour
 	}
@@ -169,8 +225,8 @@ func (s *Server) cookieSecure(r *http.Request) bool {
 	if s.remoteTrusted(r) && r.Header.Get("X-Forwarded-Proto") == "https" {
 		return true
 	}
-	if s.cfg.Public.CookieSecure != nil {
-		return *s.cfg.Public.CookieSecure
+	if s.cfg().Public.CookieSecure != nil {
+		return *s.cfg().Public.CookieSecure
 	}
 	return true
 }

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -24,6 +25,13 @@ type Config struct {
 	Services   []Service `yaml:"services"`
 	APIKeys    []APIKey  `yaml:"api_keys"`
 	OnChange   string    `yaml:"on_change"` // webhook URL, optional
+
+	// ConfigOverlay is the path to the panel-editable overlay file (see
+	// overlay.go): services/durations/api_keys added or changed from the
+	// admin panel live there instead of this file, which stays hand-owned
+	// and is never rewritten. Defaults to "managed.yaml" next to
+	// StateFile; see OverlayPath.
+	ConfigOverlay string `yaml:"config_overlay"`
 
 	// Parsed form, filled by Validate.
 	ParsedDurations []time.Duration `yaml:"-"`
@@ -78,19 +86,24 @@ const (
 
 // Service is one proxied/guarded service.
 type Service struct {
-	Name               string      `yaml:"name"`
-	Title              string      `yaml:"title"`
-	Hosts              []string    `yaml:"hosts"`
-	Mode               string      `yaml:"mode"` // "proxy" or "forwardauth"
-	Upstream           string      `yaml:"upstream"`
-	Group              string      `yaml:"group"`
-	PassBypassesClosed *bool       `yaml:"pass_bypasses_closed"`
-	Auth               ServiceAuth `yaml:"auth"`
+	Name               string      `yaml:"name" json:"name"`
+	Title              string      `yaml:"title" json:"title"`
+	Hosts              []string    `yaml:"hosts" json:"hosts"`
+	Mode               string      `yaml:"mode" json:"mode"` // "proxy" or "forwardauth"
+	Upstream           string      `yaml:"upstream" json:"upstream,omitempty"`
+	Group              string      `yaml:"group" json:"group,omitempty"`
+	PassBypassesClosed *bool       `yaml:"pass_bypasses_closed" json:"pass_bypasses_closed,omitempty"`
+	Auth               ServiceAuth `yaml:"auth" json:"auth,omitempty"`
 
 	// Closed-page theming.
-	Message     string `yaml:"message"`
-	AccentColor string `yaml:"accent_color"`
-	LogoURL     string `yaml:"logo_url"`
+	Message     string `yaml:"message" json:"message,omitempty"`
+	AccentColor string `yaml:"accent_color" json:"accent_color,omitempty"`
+	LogoURL     string `yaml:"logo_url" json:"logo_url,omitempty"`
+
+	// Source is "base" or "overlay", set by MergeOverlay (see overlay.go)
+	// to tell the panel which services are read-only. It is derived, not
+	// configuration: never read from or written to either YAML file.
+	Source string `yaml:"-" json:"source,omitempty"`
 }
 
 // APIKey is one scoped credential for the versioned /api/v1 endpoints
@@ -98,13 +111,17 @@ type Service struct {
 // ever persisted; the raw key is shown once, at creation time, by
 // `hodor key new`.
 type APIKey struct {
-	ID           string   `yaml:"id"`
-	Name         string   `yaml:"name"`
-	Hash         string   `yaml:"hash"`     // sha256 hex of the raw key
-	Services     []string `yaml:"services"` // service name, group name, or "*" for all
-	Actions      []string `yaml:"actions"`  // subset of "open", "close", "status"
-	AllowOrigins []string `yaml:"allow_origins"`
-	CreatedAt    string   `yaml:"created_at"`
+	ID           string   `yaml:"id" json:"id"`
+	Name         string   `yaml:"name" json:"name"`
+	Hash         string   `yaml:"hash" json:"-"`            // sha256 hex of the raw key; never exposed back over JSON
+	Services     []string `yaml:"services" json:"services"` // service name, group name, or "*" for all
+	Actions      []string `yaml:"actions" json:"actions"`   // subset of "open", "close", "status"
+	AllowOrigins []string `yaml:"allow_origins" json:"allow_origins,omitempty"`
+	CreatedAt    string   `yaml:"created_at" json:"created_at,omitempty"`
+
+	// Source is "base" or "overlay", set by MergeOverlay. Derived, not
+	// configuration: never (un)marshaled to/from YAML.
+	Source string `yaml:"-" json:"source,omitempty"`
 }
 
 const (
@@ -118,7 +135,7 @@ const (
 
 // ServiceAuth holds forwardauth-mode specific options.
 type ServiceAuth struct {
-	OnDeny OnDeny `yaml:"on_deny"`
+	OnDeny OnDeny `yaml:"on_deny" json:"on_deny,omitempty"`
 }
 
 const (
@@ -127,6 +144,11 @@ const (
 	// ModeForwardAuth guards the service via forward-auth instead of proxying it.
 	ModeForwardAuth = "forwardauth"
 )
+
+// serviceNameRe constrains service names: used as map keys, YAML
+// keys-ish identifiers and in URL paths/ids, so no whitespace or
+// characters that would need escaping.
+var serviceNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 var defaultDurations = []string{"1h", "3h", "6h", "24h"}
 
@@ -231,6 +253,9 @@ func (c *Config) Validate() error {
 		if s.Name == "" {
 			return fmt.Errorf("services[%d]: name is required", i)
 		}
+		if !serviceNameRe.MatchString(s.Name) {
+			return fmt.Errorf("services[%d]: name %q is invalid (must match %s)", i, s.Name, serviceNameRe.String())
+		}
 		if names[s.Name] {
 			return fmt.Errorf("services: duplicate name %q", s.Name)
 		}
@@ -254,8 +279,20 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("services[%s]: invalid mode %q (want %q or %q)", s.Name, s.Mode, ModeProxy, ModeForwardAuth)
 		}
 
-		if s.Mode == ModeProxy && s.Upstream == "" {
-			return fmt.Errorf("services[%s]: upstream is required in proxy mode", s.Name)
+		if s.Mode == ModeProxy {
+			if s.Upstream == "" {
+				return fmt.Errorf("services[%s]: upstream is required in proxy mode", s.Name)
+			}
+			u, err := url.Parse(s.Upstream)
+			if err != nil {
+				return fmt.Errorf("services[%s]: upstream: invalid URL %q: %w", s.Name, s.Upstream, err)
+			}
+			if u.Scheme != "http" && u.Scheme != "https" {
+				return fmt.Errorf("services[%s]: upstream: %q must use http or https", s.Name, s.Upstream)
+			}
+			if u.Host == "" {
+				return fmt.Errorf("services[%s]: upstream: %q is missing a host", s.Name, s.Upstream)
+			}
 		}
 		if s.Mode == ModeForwardAuth {
 			switch s.Auth.OnDeny {
@@ -338,7 +375,7 @@ func (c *Config) validateAPIKeys(names, groups map[string]bool) error {
 		}
 
 		for _, origin := range k.AllowOrigins {
-			if err := validateOrigin(origin); err != nil {
+			if err := ValidateOrigin(origin); err != nil {
 				return fmt.Errorf("api_keys[%s]: allow_origins: %w", k.ID, err)
 			}
 		}
@@ -355,10 +392,10 @@ func isHexString(s string) bool {
 	return true
 }
 
-// validateOrigin checks that origin is a bare scheme+host, as required
+// ValidateOrigin checks that origin is a bare scheme+host, as required
 // for an Access-Control-Allow-Origin echo value: http(s) only, no path,
 // no query, no wildcard.
-func validateOrigin(origin string) error {
+func ValidateOrigin(origin string) error {
 	if origin == "*" {
 		return fmt.Errorf("wildcard %q is not allowed", origin)
 	}

@@ -67,10 +67,10 @@ func (s *Server) v1Authenticate(r *http.Request) (v1Identity, bool) {
 	if token == "" {
 		return v1Identity{}, false
 	}
-	if s.cfg.Admin.Token != "" && pass.ConstantTimeEqual(token, s.cfg.Admin.Token) {
+	if s.cfg().Admin.Token != "" && pass.ConstantTimeEqual(token, s.cfg().Admin.Token) {
 		return v1Identity{admin: true}, true
 	}
-	if k := apikey.Match(s.cfg.APIKeys, token); k != nil {
+	if k := apikey.Match(s.cfg().APIKeys, token); k != nil {
 		return v1Identity{key: k}, true
 	}
 	return v1Identity{}, false
@@ -158,8 +158,8 @@ func (s *Server) v1Preflight(w http.ResponseWriter, r *http.Request) {
 	action := v1ActionFromPath(r.URL.Path)
 	scopeSvc, ok := s.v1ScopeTarget(name)
 	if ok {
-		for i := range s.cfg.APIKeys {
-			k := &s.cfg.APIKeys[i]
+		for i := range s.cfg().APIKeys {
+			k := &s.cfg().APIKeys[i]
 			if apikey.Allows(*k, scopeSvc, action) && originAllowed(k.AllowOrigins, origin) {
 				setV1CORSHeaders(w, origin)
 				break
@@ -194,13 +194,13 @@ func originAllowed(allowed []string, origin string) bool {
 // if name matches one, or a synthetic Service{Group: name} if name
 // matches a group instead.
 func (s *Server) v1ScopeTarget(name string) (config.Service, bool) {
-	for i := range s.cfg.Services {
-		if s.cfg.Services[i].Name == name {
-			return s.cfg.Services[i], true
+	for i := range s.cfg().Services {
+		if s.cfg().Services[i].Name == name {
+			return s.cfg().Services[i], true
 		}
 	}
-	for i := range s.cfg.Services {
-		if s.cfg.Services[i].Group == name {
+	for i := range s.cfg().Services {
+		if s.cfg().Services[i].Group == name {
 			return config.Service{Group: name}, true
 		}
 	}
@@ -212,8 +212,8 @@ func (s *Server) v1ScopeTarget(name string) (config.Service, bool) {
 // across its members, state keyed by the group name itself, same as
 // resolveKey/stateKey do for open/close).
 func (s *Server) v1ServiceView(name string) (ServiceView, bool) {
-	for i := range s.cfg.Services {
-		svc := &s.cfg.Services[i]
+	for i := range s.cfg().Services {
+		svc := &s.cfg().Services[i]
 		if svc.Name != name {
 			continue
 		}
@@ -229,8 +229,8 @@ func (s *Server) v1ServiceView(name string) (ServiceView, bool) {
 	var hosts []string
 	mode := ""
 	member := false
-	for i := range s.cfg.Services {
-		svc := &s.cfg.Services[i]
+	for i := range s.cfg().Services {
+		svc := &s.cfg().Services[i]
 		if svc.Group != name {
 			continue
 		}
@@ -269,7 +269,7 @@ func (s *Server) handleV1ServiceGet(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "unknown service or group"})
 		return
 	}
-	writeJSON(w, http.StatusOK, ServiceV1View{ServiceView: view, Durations: s.cfg.Durations})
+	writeJSON(w, http.StatusOK, ServiceV1View{ServiceView: view, Durations: s.cfg().Durations})
 }
 
 func (s *Server) handleV1ServiceOpen(w http.ResponseWriter, r *http.Request) {

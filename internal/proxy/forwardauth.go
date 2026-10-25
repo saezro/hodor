@@ -21,7 +21,7 @@ func (s *Server) remoteTrusted(r *http.Request) bool {
 	if ip == nil {
 		return false
 	}
-	return auth.IPAllowed(s.cfg.Public.ParsedProxies, ip)
+	return auth.IPAllowed(s.cfg().Public.ParsedProxies, ip)
 }
 
 // handleForwardAuth implements GET /auth for Traefik forwardAuth / Caddy

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/saezro/hodor/internal/apikey"
 	"github.com/saezro/hodor/internal/auth"
 	"github.com/saezro/hodor/internal/pass"
 )
@@ -25,8 +26,8 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 // admin.trusted_proxies/trusted_header when behind a reverse proxy.
 func (s *Server) cidrCheck(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := auth.ClientIP(r, s.cfg.Admin.ParsedProxies, s.cfg.Admin.TrustedHeader)
-		if ip == nil || !auth.IPAllowed(s.cfg.Admin.ParsedCIDRs, ip) {
+		ip := auth.ClientIP(r, s.cfg().Admin.ParsedProxies, s.cfg().Admin.TrustedHeader)
+		if ip == nil || !auth.IPAllowed(s.cfg().Admin.ParsedCIDRs, ip) {
 			s.log.Warn("admin: rejected client outside allow_cidrs", "remote", r.RemoteAddr)
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
@@ -56,12 +57,24 @@ func (s *Server) csrfAndAuth(next http.Handler) http.Handler {
 		isAPI := strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/metrics"
 		bearerOK := s.checkBearer(r)
 
-		if isAPI && s.cfg.Admin.Token != "" && !bearerOK {
+		// A scoped /api/v1 key is never valid on the panel's own /api/*:
+		// reject explicitly (403) instead of falling through to the
+		// generic "no/invalid admin.token" 401 below.
+		if isAPI && !bearerOK {
+			if tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok && tok != "" {
+				if apikey.Match(s.cfg().APIKeys, tok) != nil {
+					http.Error(w, "scoped api keys cannot access this endpoint", http.StatusForbidden)
+					return
+				}
+			}
+		}
+
+		if isAPI && s.cfg().Admin.Token != "" && !bearerOK {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		if isAPI && (r.Method == http.MethodPost || r.Method == http.MethodDelete) && !bearerOK {
+		if isAPI && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete) && !bearerOK {
 			if !pass.ConstantTimeEqual(r.Header.Get("X-CSRF-Token"), s.csrfToken) {
 				http.Error(w, "invalid csrf token", http.StatusForbidden)
 				return
@@ -76,7 +89,7 @@ func (s *Server) csrfAndAuth(next http.Handler) http.Handler {
 // token. If no token is configured, it always reports false (bearer
 // auth is simply not in use).
 func (s *Server) checkBearer(r *http.Request) bool {
-	if s.cfg.Admin.Token == "" {
+	if s.cfg().Admin.Token == "" {
 		return false
 	}
 	h := r.Header.Get("Authorization")
@@ -84,5 +97,5 @@ func (s *Server) checkBearer(r *http.Request) bool {
 	if !strings.HasPrefix(h, prefix) {
 		return false
 	}
-	return pass.ConstantTimeEqual(strings.TrimPrefix(h, prefix), s.cfg.Admin.Token)
+	return pass.ConstantTimeEqual(strings.TrimPrefix(h, prefix), s.cfg().Admin.Token)
 }

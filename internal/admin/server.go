@@ -35,7 +35,7 @@ const (
 
 // Server is the admin-listener HTTP handler.
 type Server struct {
-	cfg       *config.Config
+	live      *config.Live
 	state     *state.Store
 	pins      *pin.Manager
 	secret    []byte
@@ -48,8 +48,11 @@ type Server struct {
 	handler http.Handler
 }
 
-// New builds the admin-listener handler for cfg.
-func New(cfg *config.Config, st *state.Store, pins *pin.Manager, secret []byte, log *slog.Logger) (*Server, error) {
+// New builds the admin-listener handler for live's current config.
+// Every request re-reads live.Get() (see Server.cfg), so a reload or a
+// panel save (internal/config.Live) is visible to the very next
+// request, with no restart.
+func New(live *config.Live, st *state.Store, pins *pin.Manager, secret []byte, log *slog.Logger) (*Server, error) {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -57,8 +60,9 @@ func New(cfg *config.Config, st *state.Store, pins *pin.Manager, secret []byte, 
 	if err != nil {
 		return nil, err
 	}
+	cfg := live.Get()
 	s := &Server{
-		cfg:       cfg,
+		live:      live,
 		state:     st,
 		pins:      pins,
 		secret:    secret,
@@ -86,6 +90,14 @@ func New(cfg *config.Config, st *state.Store, pins *pin.Manager, secret []byte, 
 	mux.HandleFunc("DELETE /api/passes/{id}", s.handlePassRevoke)
 	mux.HandleFunc("GET /api/events", s.handleEventsList)
 
+	mux.HandleFunc("GET /api/config", s.handleConfigGet)
+	mux.HandleFunc("PUT /api/config/services/{name}", s.handleConfigServicePut)
+	mux.HandleFunc("DELETE /api/config/services/{name}", s.handleConfigServiceDelete)
+	mux.HandleFunc("PUT /api/config/durations", s.handleConfigDurationsPut)
+	mux.HandleFunc("POST /api/config/keys", s.handleConfigKeyCreate)
+	mux.HandleFunc("DELETE /api/config/keys/{id}", s.handleConfigKeyDelete)
+	mux.HandleFunc("POST /api/config/reload", s.handleConfigReload)
+
 	mux.HandleFunc("GET /api/v1/services/{name}", s.handleV1ServiceGet)
 	mux.HandleFunc("POST /api/v1/services/{name}/open", s.handleV1ServiceOpen)
 	mux.HandleFunc("POST /api/v1/services/{name}/close", s.handleV1ServiceClose)
@@ -95,6 +107,10 @@ func New(cfg *config.Config, st *state.Store, pins *pin.Manager, secret []byte, 
 	s.handler = s.securityHeaders(s.cidrCheck(s.csrfAndAuth(s.apiV1Guard(mux))))
 	return s, nil
 }
+
+// cfg returns the currently active config. Called per request (never
+// cached in a field) so a reload/save is visible immediately.
+func (s *Server) cfg() *config.Config { return s.live.Get() }
 
 // ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

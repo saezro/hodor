@@ -1,6 +1,11 @@
 lang: es
 secret_file: /run/secrets/hodor   # 32+ bytes, used for HMAC; generated on first run if missing (0600)
 state_file: /data/state.json
+# config_overlay: /data/managed.yaml   # default: "managed.yaml" next to state_file; edited by the admin panel
+#   (services/durations/api_keys only). This file is never hand-owned: don't
+#   edit hodor.yaml's own listen/secret_file/state_file and expect them to
+#   hot-reload - they don't; everything else does, via SIGHUP or
+#   POST /api/config/reload.
 listen: { public: ":8080", admin: ":8081" }
 admin:
   allow_cidrs: [192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, 127.0.0.0/8]
