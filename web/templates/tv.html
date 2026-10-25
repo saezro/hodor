@@ -1,0 +1,143 @@
+{{/*
+Template: tv.html
+Rendered by internal/proxy at GET /tv?service=<name> for keyboard-less
+devices to pair: shows a 6-digit PIN (and, once implemented, a QR code)
+and polls the server until an admin approves it from the panel.
+
+Data: internal/web.TVData
+  .Lang              string  current UI language ("en"/"es")
+  .ServiceName       string  service identifier, used to build the poll URL
+  .ServiceTitle      string  human title of the service
+  .Code              string  the 6-digit PIN to display
+  .SessionID         string  opaque session id the JS uses to poll /.hodor/tv/status
+  .ExpiresInSeconds  int     seconds until the PIN expires (countdown), normally 600
+  .QRAvailable       bool    whether a QR image is available; false in v0.1 (TODO: pure-Go QR encoder)
+  .QRDataURI         string  data: URI for the QR image when QRAvailable is true; empty otherwise
+  .Strings.Title       string  translated "Device pass"
+  .Strings.EnterPin    string  translated "Enter this PIN on the admin panel..."
+  .Strings.Expires     string  translated "This PIN expires in 10 minutes."
+  .Strings.QRTodo      string  translated fallback text shown instead of a QR code
+*/ -}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{{.ServiceTitle}} — {{.Strings.Title}}</title>
+  <style>
+    :root {
+      --paper: #FAF8F4; --ink: #1C1B19; --ink-muted: #6b6760;
+      --card: #ffffff; --border: rgba(28, 27, 25, 0.1);
+      --accent: #C97A2E; --accent-contrast: #FAF8F4; --ok: #3f7d46;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #15130F; --ink: #F2EDE4; --ink-muted: #a39d91;
+        --card: #1C1B19; --border: rgba(242, 237, 228, 0.12);
+        --accent-contrast: #15130F; --ok: #7bc47f;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      font-family: Inter, "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--paper); color: var(--ink); padding: 2rem;
+      -webkit-font-smoothing: antialiased;
+    }
+    .card { max-width: 34rem; width: 100%; text-align: center; }
+    .eyebrow {
+      font-size: 1rem; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--ink-muted); font-weight: 600; margin: 0 0 0.5rem;
+    }
+    .service { font-weight: 700; font-size: 1.6rem; margin: 0 0 1.75rem; letter-spacing: -0.01em; }
+    .code {
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: clamp(3.5rem, 14vw, 7rem); font-weight: 700;
+      letter-spacing: 0.18em; line-height: 1;
+      background: var(--card); border: 1px solid var(--border); border-radius: 1.75rem;
+      padding: 1.5rem 1rem 1.25rem; margin: 0 0 1.75rem;
+      color: var(--accent);
+      box-shadow: 0 1px 2px rgba(28, 27, 25, 0.04), 0 24px 48px -20px rgba(28, 27, 25, 0.25);
+    }
+    .instructions { font-size: 1.3rem; color: var(--ink); margin: 0 0 1rem; line-height: 1.4; }
+    .qr-placeholder {
+      border: 1px dashed var(--border); border-radius: 1rem; padding: 1.5rem 1rem;
+      color: var(--ink-muted); font-size: 1rem; margin: 0 0 1.5rem;
+    }
+    .timer-track {
+      height: 6px; border-radius: 999px; background: var(--border); overflow: hidden;
+      margin: 0 auto 0.75rem; max-width: 20rem;
+    }
+    .timer-fill { height: 100%; background: var(--accent); width: 100%; transform-origin: left; }
+    .expires { color: var(--ink-muted); font-size: 1.05rem; font-family: "JetBrains Mono", ui-monospace, monospace; }
+    .approved {
+      color: var(--ok); font-weight: 700; font-size: 1.6rem; display: none;
+      align-items: center; justify-content: center; gap: 0.5rem;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .timer-fill { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <p class="eyebrow">{{.Strings.Title}}</p>
+    <h1 class="service">{{.ServiceTitle}}</h1>
+
+    <div class="code" id="pin-code" aria-live="polite">{{.Code}}</div>
+    <p class="instructions">{{.Strings.EnterPin}}</p>
+
+    {{if .QRAvailable}}
+      <img src="{{.QRDataURI}}" alt="QR" width="200" height="200">
+    {{else}}
+      <div class="qr-placeholder">{{.Strings.QRTodo}}</div>
+    {{end}}
+
+    <div class="timer-track" aria-hidden="true"><div class="timer-fill" id="timer-fill"></div></div>
+    <p class="expires" id="expires">{{.Strings.Expires}}</p>
+    <p class="approved" id="approved-msg" role="status">✓ <span id="approved-text">{{if eq .Lang "es"}}Aprobado{{else}}Approved{{end}}</span></p>
+  </main>
+  <script>
+    (function () {
+      var sessionID = "{{.SessionID}}";
+      var total = {{.ExpiresInSeconds}};
+      var remaining = total;
+      var expiresEl = document.getElementById('expires');
+      var approvedEl = document.getElementById('approved-msg');
+      var fillEl = document.getElementById('timer-fill');
+
+      function tick() {
+        remaining -= 1;
+        if (remaining <= 0) {
+          expiresEl.textContent = '';
+          fillEl.style.width = '0%';
+          clearInterval(timer);
+          return;
+        }
+        var m = Math.floor(remaining / 60), s = remaining % 60;
+        expiresEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+        fillEl.style.width = (100 * remaining / total) + '%';
+      }
+      var timer = setInterval(tick, 1000);
+
+      function poll() {
+        fetch('/.hodor/tv/status?session=' + encodeURIComponent(sessionID))
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (data && data.approved) {
+              approvedEl.style.display = 'flex';
+              clearInterval(timer);
+              clearInterval(poller);
+              setTimeout(function () { window.location.reload(); }, 1500);
+            }
+          })
+          .catch(function () {});
+      }
+      var poller = setInterval(poll, 3000);
+    })();
+  </script>
+</body>
+</html>

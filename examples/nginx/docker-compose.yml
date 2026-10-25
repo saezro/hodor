@@ -1,0 +1,26 @@
+services:
+  nginx:
+    image: nginx:1
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  hodor:
+    image: ghcr.io/saezro/hodor:latest
+    restart: unless-stopped
+    ports:
+      - "8081:8081" # admin panel — LAN/VPN only
+    volumes:
+      - ./hodor.yaml:/etc/hodor/hodor.yaml:ro
+      - hodor-data:/data
+    environment:
+      HODOR_CONFIG: /etc/hodor/hodor.yaml
+
+  geo:
+    image: ghcr.io/example/geoguessr-clone:latest
+    restart: unless-stopped
+
+volumes:
+  hodor-data:

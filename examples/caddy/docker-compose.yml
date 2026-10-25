@@ -1,0 +1,31 @@
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  hodor:
+    image: ghcr.io/saezro/hodor:latest
+    restart: unless-stopped
+    ports:
+      - "8081:8081" # admin panel — LAN/VPN only
+    volumes:
+      - ./hodor.yaml:/etc/hodor/hodor.yaml:ro
+      - hodor-data:/data
+    environment:
+      HODOR_CONFIG: /etc/hodor/hodor.yaml
+
+  geo:
+    image: ghcr.io/example/geoguessr-clone:latest
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:
+  hodor-data:

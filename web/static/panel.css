@@ -1,0 +1,281 @@
+/* panel.css — hodor admin panel. Identity: ink/paper + amber accent,
+   Inter for text, JetBrains Mono for codes/timestamps/durations.
+   Tokens: --raw-* primitives -> semantic (--color-*, --action-*) ->
+   component. Only semantics change under prefers-color-scheme. */
+
+:root {
+  --raw-ink: #1C1B19;
+  --raw-paper: #FAF8F4;
+  --raw-amber: #C97A2E;
+  --raw-amber-light: #E29A4E;
+  --raw-amber-dark: #B9712B;
+  --raw-amber-glow: #F2B766;
+  --raw-green: #3f7d46;
+  --raw-red: #a23b2e;
+
+  --font-text: Inter, "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  --color-bg: var(--raw-paper);
+  --color-surface: #ffffff;
+  --color-surface-sunken: #F1EEE7;
+  --color-text: var(--raw-ink);
+  --color-text-muted: #6b6760;
+  --color-border: rgba(28, 27, 25, 0.1);
+  --color-border-strong: rgba(28, 27, 25, 0.22);
+
+  --action-primary: var(--raw-amber);
+  --action-primary-text: var(--raw-paper);
+  --action-primary-hover: var(--raw-amber-dark);
+
+  --status-open-bg: rgba(63, 125, 70, 0.12);
+  --status-open-fg: var(--raw-green);
+  --status-closed-bg: rgba(162, 59, 46, 0.1);
+  --status-closed-fg: var(--raw-red);
+
+  --focus-ring: var(--raw-amber);
+  --shadow-card: 0 1px 2px rgba(28, 27, 25, 0.04), 0 10px 24px -12px rgba(28, 27, 25, 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #15130F;
+    --color-surface: #1C1B19;
+    --color-surface-sunken: #1F1D19;
+    --color-text: #F2EDE4;
+    --color-text-muted: #a39d91;
+    --color-border: rgba(242, 237, 228, 0.12);
+    --color-border-strong: rgba(242, 237, 228, 0.22);
+
+    --action-primary: var(--raw-amber-glow);
+    --action-primary-text: #15130F;
+    --action-primary-hover: var(--raw-amber);
+
+    --status-open-bg: rgba(123, 196, 127, 0.14);
+    --status-open-fg: #7bc47f;
+    --status-closed-bg: rgba(224, 112, 94, 0.16);
+    --status-closed-fg: #e0705e;
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 32px -16px rgba(0, 0, 0, 0.5);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { color-scheme: light dark; }
+
+body {
+  margin: 0;
+  font-family: var(--font-text);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.topbar {
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  background: var(--color-bg);
+  z-index: 10;
+}
+
+.brand { display: flex; align-items: center; gap: 0.55rem; }
+.brand-mark .brand-frame { fill: var(--color-surface); }
+.brand-mark .brand-dark { fill: var(--color-bg); }
+.brand h1 { margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -0.01em; }
+
+.status-pill {
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 0.25rem 0.6rem; border-radius: 999px;
+  background: var(--status-closed-bg); color: var(--status-closed-fg);
+}
+
+main#app {
+  padding: 1rem 1.25rem 4rem;
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.tabs {
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 1.5rem;
+  position: sticky;
+  top: 3.1rem;
+  background: var(--color-bg);
+  z-index: 9;
+  padding-top: 0.25rem;
+}
+
+.tab-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.5rem 0.1rem 0.75rem;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.tab-link.is-active,
+.tab-link:hover { color: var(--color-text); }
+.tab-link.is-active { border-bottom-color: var(--action-primary); }
+
+.count-badge {
+  background: var(--action-primary);
+  color: var(--action-primary-text);
+  font-size: 0.68rem;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3rem;
+}
+
+.panel-section { margin-bottom: 2.25rem; scroll-margin-top: 5.5rem; }
+
+.section-head { margin-bottom: 0.75rem; }
+.section-head h2 { margin: 0 0 0.15rem; font-size: 1.02rem; font-weight: 650; }
+.section-hint { margin: 0; color: var(--color-text-muted); font-size: 0.85rem; }
+
+.list { display: flex; flex-direction: column; gap: 0.6rem; }
+
+.empty {
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  padding: 1.1rem 1rem;
+  text-align: center;
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border-strong);
+}
+
+.skeleton-row {
+  height: 3.3rem;
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, var(--color-surface-sunken) 25%, var(--color-surface) 37%, var(--color-surface-sunken) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+@media (prefers-reduced-motion: reduce) { .skeleton-row { animation: none; } }
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+.row {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  box-shadow: var(--shadow-card);
+}
+
+.row-main { display: flex; flex-direction: column; gap: 0.2rem; min-width: 8rem; }
+.row .name { font-weight: 650; font-size: 0.95rem; }
+.row .meta { color: var(--color-text-muted); font-size: 0.8rem; font-family: var(--font-mono); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+.badge.open { background: var(--status-open-bg); color: var(--status-open-fg); }
+.badge.closed { background: var(--status-closed-bg); color: var(--status-closed-fg); }
+.badge.revoked { background: var(--status-closed-bg); color: var(--status-closed-fg); }
+
+button, select {
+  font: inherit;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+  min-height: 2.25rem;
+}
+button:hover { border-color: var(--color-text-muted); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+button.primary { background: var(--action-primary); color: var(--action-primary-text); border-color: var(--action-primary); font-weight: 650; }
+button.primary:hover { background: var(--action-primary-hover); border-color: var(--action-primary-hover); }
+button.danger { color: var(--status-closed-fg); border-color: var(--status-closed-bg); }
+button.danger:hover { background: var(--status-closed-bg); }
+
+@media (prefers-reduced-motion: reduce) {
+  button { transition: none; }
+}
+
+.actions { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+
+.pin-code {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  color: var(--action-primary);
+  width: 5.5rem;
+}
+
+.event-row { padding: 0.65rem 1rem; box-shadow: none; }
+.event-time { color: var(--color-text-muted); font-size: 0.78rem; font-family: var(--font-mono); margin-right: 0.6rem; white-space: nowrap; }
+.event-msg { font-size: 0.88rem; }
+
+.toast-region {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 50;
+  width: min(26rem, calc(100vw - 2rem));
+}
+
+.toast {
+  background: var(--color-text);
+  color: var(--color-bg);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.9rem;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-card);
+  animation: toast-in 180ms ease;
+}
+.toast.error { background: var(--status-closed-fg); color: #fff; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+@media (min-width: 640px) {
+  main#app { padding-top: 1.5rem; }
+  .row { padding: 1rem 1.25rem; }
+}

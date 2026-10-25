@@ -1,0 +1,27 @@
+# Build artifacts
+/hodor
+/dist/
+*.exe
+*.exe~
+*.test
+*.out
+
+# Runtime state / secrets (never commit real config or state)
+state.json
+*.state.json
+hodor.yaml
+!hodor.example.yaml
+!examples/**/hodor.yaml
+.env
+secrets/
+*.pem
+*.key
+
+# Go tooling
+/vendor/
+
+# Editor/OS cruft
+.idea/
+.vscode/
+*.swp
+.DS_Store

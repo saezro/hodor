@@ -1,0 +1,32 @@
+# Run hodor in proxy mode behind a Cloudflare Tunnel.
+#
+# cloudflared only forwards to hodor's public listener (8080). hodor's admin
+# listener (8081) is kept off the tunnel entirely — reach it over your LAN
+# or VPN only.
+#
+# Set TUNNEL_TOKEN from your Cloudflare Zero Trust dashboard
+# (Networks > Tunnels > your tunnel > install connector) before running.
+
+services:
+  hodor:
+    image: ghcr.io/saezro/hodor:latest
+    restart: unless-stopped
+    ports:
+      - "8081:8081" # admin panel — LAN/VPN only, do not expose publicly
+    volumes:
+      - ./hodor.yaml:/etc/hodor/hodor.yaml:ro
+      - hodor-data:/data
+    environment:
+      HODOR_CONFIG: /etc/hodor/hodor.yaml
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on:
+      - hodor
+
+volumes:
+  hodor-data:

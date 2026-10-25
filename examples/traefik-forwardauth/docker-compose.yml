@@ -1,0 +1,48 @@
+# hodor in forwardauth mode behind Traefik: Traefik does the actual
+# reverse-proxying to `geo`, calling out to hodor's /auth endpoint first.
+
+services:
+  traefik:
+    image: traefik:v3
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  hodor:
+    image: ghcr.io/saezro/hodor:latest
+    restart: unless-stopped
+    ports:
+      - "8081:8081" # admin panel — LAN/VPN only
+    volumes:
+      - ./hodor.yaml:/etc/hodor/hodor.yaml:ro
+      - hodor-data:/data
+    environment:
+      HODOR_CONFIG: /etc/hodor/hodor.yaml
+    labels:
+      # Route hodor's own closed page / /tv pairing on the real hostname.
+      - traefik.enable=true
+      - traefik.http.routers.hodor-internal.rule=PathPrefix(`/.hodor`) || PathPrefix(`/tv`)
+      - traefik.http.routers.hodor-internal.service=hodor
+      - traefik.http.services.hodor.loadbalancer.server.port=8080
+      - traefik.http.middlewares.hodor-auth.forwardauth.address=http://hodor:8080/auth
+      - traefik.http.middlewares.hodor-auth.forwardauth.trustForwardHeader=true
+
+  geo:
+    image: ghcr.io/example/geoguessr-clone:latest
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.geo.rule=Host(`geo.example.com`)
+      - traefik.http.routers.geo.middlewares=hodor-auth
+      - traefik.http.services.geo.loadbalancer.server.port=3469
+
+volumes:
+  hodor-data:

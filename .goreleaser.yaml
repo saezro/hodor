@@ -1,0 +1,97 @@
+version: 2
+
+project_name: hodor
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: hodor
+    main: ./cmd/hodor
+    binary: hodor
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: hodor
+    ids:
+      - hodor
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+      - hodor.example.yaml
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+dockers:
+  - id: hodor-amd64
+    ids:
+      - hodor
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/saezro/hodor:{{ .Version }}-amd64"
+      - "ghcr.io/saezro/hodor:latest-amd64"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--build-arg=VERSION={{ .Version }}"
+  - id: hodor-arm64
+    ids:
+      - hodor
+    goos: linux
+    goarch: arm64
+    image_templates:
+      - "ghcr.io/saezro/hodor:{{ .Version }}-arm64"
+      - "ghcr.io/saezro/hodor:latest-arm64"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=VERSION={{ .Version }}"
+
+docker_manifests:
+  - name_template: "ghcr.io/saezro/hodor:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/saezro/hodor:{{ .Version }}-amd64"
+      - "ghcr.io/saezro/hodor:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/saezro/hodor:latest"
+    image_templates:
+      - "ghcr.io/saezro/hodor:latest-amd64"
+      - "ghcr.io/saezro/hodor:latest-arm64"
+
+release:
+  github:
+    owner: saezro
+    name: hodor

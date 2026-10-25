@@ -1,0 +1,171 @@
+// Package pin implements the device-pairing PIN flow: a TV (or any
+// keyboard-less device) requests a 6-digit PIN for a service, an admin
+// approves it from the panel, and the device's polling request then
+// learns it was approved so the caller can issue it a pass.
+package pin
+
+import (
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+)
+
+// ErrNotFound is returned by Approve when no pending PIN matches code.
+var ErrNotFound = errors.New("pin: no matching pending PIN")
+
+const ttl = 10 * time.Minute
+
+// Clock abstracts time.Now for tests.
+type Clock interface{ Now() time.Time }
+
+type realClock struct{}
+
+func (realClock) Now() time.Time { return time.Now() }
+
+// Entry is one pending or resolved PIN.
+type Entry struct {
+	SessionID string
+	Code      string
+	Service   string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	Approved  bool
+}
+
+func (e Entry) expired(now time.Time) bool { return !now.Before(e.ExpiresAt) }
+
+// Manager tracks pending PINs in memory (deliberately not persisted:
+// they are short-lived and meaningless after a restart).
+type Manager struct {
+	mu    sync.Mutex
+	clock Clock
+	byID  map[string]*Entry
+}
+
+// New returns a Manager. clock may be nil to use the real wall clock.
+func New(clock Clock) *Manager {
+	if clock == nil {
+		clock = realClock{}
+	}
+	return &Manager{clock: clock, byID: make(map[string]*Entry)}
+}
+
+// Create generates a new pending PIN for service and returns its entry.
+func (m *Manager) Create(service string) (*Entry, error) {
+	sid, err := randomHex(16)
+	if err != nil {
+		return nil, err
+	}
+	code, err := randomCode()
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := m.clock.Now()
+	e := &Entry{
+		SessionID: sid,
+		Code:      code,
+		Service:   service,
+		CreatedAt: now,
+		ExpiresAt: now.Add(ttl),
+	}
+	m.byID[sid] = e
+	m.gcLocked(now)
+	cp := *e
+	return &cp, nil
+}
+
+// Get returns a copy of the entry for sessionID, if present and not
+// expired.
+func (m *Manager) Get(sessionID string) (Entry, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, ok := m.byID[sessionID]
+	if !ok || e.expired(m.clock.Now()) {
+		return Entry{}, false
+	}
+	return *e, true
+}
+
+// Pending lists all non-expired, non-approved PINs (for the admin
+// panel).
+func (m *Manager) Pending() []Entry {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := m.clock.Now()
+	var out []Entry
+	for _, e := range m.byID {
+		if !e.Approved && !e.expired(now) {
+			out = append(out, *e)
+		}
+	}
+	return out
+}
+
+// Approve marks the pending PIN matching code as approved and returns
+// its entry. Code comparison is constant-time. Brute-force protection
+// against repeated wrong codes is the caller's responsibility (see
+// auth.RateLimiter, applied per client IP in the admin handler).
+func (m *Manager) Approve(code string) (Entry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := m.clock.Now()
+
+	for _, e := range m.byID {
+		if e.expired(now) || e.Approved {
+			continue
+		}
+		if subtle.ConstantTimeCompare([]byte(e.Code), []byte(code)) == 1 {
+			e.Approved = true
+			return *e, nil
+		}
+	}
+
+	return Entry{}, ErrNotFound
+}
+
+// Consume removes sessionID so a later poll sees it as gone (used once a
+// pass has been issued for it, so the same approval cannot issue a second
+// pass).
+func (m *Manager) Consume(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.byID, sessionID)
+}
+
+// gcLocked drops expired entries. Caller must hold m.mu.
+func (m *Manager) gcLocked(now time.Time) {
+	for id, e := range m.byID {
+		if e.expired(now) {
+			delete(m.byID, id)
+		}
+	}
+}
+
+func randomCode() (string, error) {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("pin: generate code: %w", err)
+	}
+	n := binary.BigEndian.Uint32(b[:]) % 1000000
+	return fmt.Sprintf("%06d", n), nil
+}
+
+func randomHex(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("pin: generate id: %w", err)
+	}
+	const hexChars = "0123456789abcdef"
+	out := make([]byte, n*2)
+	for i, c := range b {
+		out[i*2] = hexChars[c>>4]
+		out[i*2+1] = hexChars[c&0x0f]
+	}
+	return string(out), nil
+}

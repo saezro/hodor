@@ -1,0 +1,17 @@
+geo.example.com {
+	# hodor decides, per request, whether this is allowed through.
+	forward_auth hodor:8080 {
+		uri /auth
+	}
+
+	# Route hodor's own closed page / /tv pairing through on the real
+	# hostname, so links from the closed page and PIN pairing work.
+	handle /.hodor/* {
+		reverse_proxy hodor:8080
+	}
+	handle /tv* {
+		reverse_proxy hodor:8080
+	}
+
+	reverse_proxy geo:3469
+}

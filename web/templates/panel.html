@@ -1,0 +1,101 @@
+{{/*
+Template: panel.html
+Rendered once by internal/admin at GET / on the admin listener. It is a
+single embedded HTML page with vanilla JS (no build step) that talks to
+the JSON admin API (GET/POST /api/...) using the CSRF token below on
+every POST. Dark/light follows prefers-color-scheme; layout is
+mobile-first.
+
+Data: internal/web.PanelData
+  .Lang          string    current UI language ("en"/"es"), set on <html lang="">
+  .CSRFToken     string    token the JS must send as header X-CSRF-Token on every mutation
+  .Durations     []string  configured "open for" presets, e.g. ["1h","3h","6h","24h"]
+  .Strings.Title string    translated page title, "hodor — admin panel"
+
+Note: the CSRF token and durations are passed to panel.js via a JSON
+<script type="application/json"> data island (#hodor-data) instead of an
+inline script setting a global, because the admin listener's CSP is
+`default-src 'self'` with no 'unsafe-inline' — an inline <script> would
+be silently blocked by the browser. panel.js reads the island by id.
+*/ -}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{{.Strings.Title}}</title>
+  <link rel="stylesheet" href="/static/panel.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 64 64" width="28" height="28" role="img" aria-hidden="true">
+        <defs><linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E29A4E"/><stop offset="1" stop-color="#B9712B"/></linearGradient></defs>
+        <rect x="2" y="2" width="60" height="60" rx="14" fill="#FAF8F4" class="brand-frame"/>
+        <path d="M20 50 V26 a12 12 0 0 1 24 0 V50 Z" fill="#1C1B19" class="brand-dark"/>
+        <path d="M44 50 V26 a12 12 0 0 0 -11.3 -12 L30 14.6 a16 16 0 0 1 14 15.2 V50 Z" fill="url(#leaf)"/>
+        <circle cx="35.5" cy="36" r="2.1" fill="#F2B766"/>
+      </svg>
+      <h1>hodor</h1>
+    </div>
+    <span class="status-pill" id="conn-status" hidden>offline</span>
+  </header>
+
+  <main id="app">
+    <nav class="tabs" aria-label="Sections">
+      <a href="#services" class="tab-link is-active">Services</a>
+      <a href="#pins" class="tab-link">Pending PINs<span class="count-badge" id="pins-count" hidden>0</span></a>
+      <a href="#passes" class="tab-link">Passes</a>
+      <a href="#events" class="tab-link">Log</a>
+    </nav>
+
+    <section id="services" class="panel-section" aria-labelledby="services-h">
+      <div class="section-head">
+        <h2 id="services-h">Services</h2>
+        <p class="section-hint">Open for a while, or close right away.</p>
+      </div>
+      <div id="services-list" class="list" aria-busy="true">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+    </section>
+
+    <section id="pins" class="panel-section" aria-labelledby="pins-h">
+      <div class="section-head">
+        <h2 id="pins-h">Pending PINs</h2>
+        <p class="section-hint">A TV screen is waiting to be paired.</p>
+      </div>
+      <div id="pins-list" class="list" aria-busy="true">
+        <div class="skeleton-row"></div>
+      </div>
+    </section>
+
+    <section id="passes" class="panel-section" aria-labelledby="passes-h">
+      <div class="section-head">
+        <h2 id="passes-h">Device passes</h2>
+        <p class="section-hint">Long-lived grants; revoke one to sign that device out.</p>
+      </div>
+      <div id="passes-list" class="list" aria-busy="true">
+        <div class="skeleton-row"></div>
+      </div>
+    </section>
+
+    <section id="events" class="panel-section" aria-labelledby="events-h">
+      <div class="section-head">
+        <h2 id="events-h">Event log</h2>
+        <p class="section-hint">Last 200 changes, most recent first.</p>
+      </div>
+      <div id="events-list" class="list" aria-busy="true">
+        <div class="skeleton-row"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
+
+  <script type="application/json" id="hodor-data">{"csrf":"{{.CSRFToken}}","durations":[{{range $i, $d := .Durations}}{{if $i}},{{end}}"{{$d}}"{{end}}],"lang":"{{.Lang}}"}</script>
+  <script src="/static/panel.js"></script>
+</body>
+</html>

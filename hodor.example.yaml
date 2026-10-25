@@ -1,0 +1,21 @@
+lang: es
+secret_file: /run/secrets/hodor   # 32+ bytes, used for HMAC; generated on first run if missing (0600)
+state_file: /data/state.json
+listen: { public: ":8080", admin: ":8081" }
+admin:
+  allow_cidrs: [192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, 127.0.0.0/8]
+  public_url: https://games.home.example.com
+durations: [1h, 3h, 6h, 24h]
+services:
+  - name: geo
+    title: GeoGuessr casero
+    hosts: [geo.example.com]
+    mode: proxy
+    upstream: http://geo:3469
+    group: games
+    pass_bypasses_closed: true
+  - name: cluedo
+    hosts: [cluedo.example.com]
+    mode: proxy
+    upstream: http://cluedo:3465
+    group: games
