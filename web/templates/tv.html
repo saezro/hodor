@@ -23,21 +23,21 @@ Data: internal/web.TVData
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="dark">
   <meta name="robots" content="noindex, nofollow">
   <title>{{.ServiceTitle}} — {{.Strings.Title}}</title>
   <style>
     :root {
+      --paper: #15130F; --ink: #F2EDE4; --ink-muted: #a39d91;
+      --card: #1C1B19; --border: rgba(242, 237, 228, 0.12);
+      --accent: #F2B766; --accent-contrast: #15130F; --ok: #7bc47f;
+      --focus-ring: #F2B766;
+    }
+    :root[data-theme="light"] {
       --paper: #FAF8F4; --ink: #1C1B19; --ink-muted: #6b6760;
       --card: #ffffff; --border: rgba(28, 27, 25, 0.1);
       --accent: #C97A2E; --accent-contrast: #FAF8F4; --ok: #3f7d46;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --paper: #15130F; --ink: #F2EDE4; --ink-muted: #a39d91;
-        --card: #1C1B19; --border: rgba(242, 237, 228, 0.12);
-        --accent-contrast: #15130F; --ok: #7bc47f;
-      }
+      --focus-ring: #C97A2E;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
@@ -47,7 +47,15 @@ Data: internal/web.TVData
       background: var(--paper); color: var(--ink); padding: 2rem;
       -webkit-font-smoothing: antialiased;
     }
+    :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 0.5rem; }
     .card { max-width: 34rem; width: 100%; text-align: center; }
+    .brand {
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      margin: 0 0 1.75rem;
+    }
+    .brand-mark { display: inline-flex; width: 32px; height: 32px; flex: none; }
+    .brand-mark svg { display: block; width: 100%; height: 100%; }
+    .brand span { font-weight: 650; font-size: 1rem; letter-spacing: -0.01em; color: var(--ink); }
     .eyebrow {
       font-size: 1rem; letter-spacing: 0.1em; text-transform: uppercase;
       color: var(--ink-muted); font-weight: 600; margin: 0 0 0.5rem;
@@ -84,6 +92,22 @@ Data: internal/web.TVData
 </head>
 <body>
   <main class="card">
+    <div class="brand" aria-hidden="true">
+      <span class="brand-mark">
+        <svg viewBox="0 0 64 64" width="32" height="32" role="img" focusable="false">
+          <defs>
+            <linearGradient id="leaf-d" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F2B766"/><stop offset="1" stop-color="#C97A2E"/></linearGradient>
+            <linearGradient id="glow-d" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FCE2B5"/><stop offset="1" stop-color="#F2B766"/></linearGradient>
+          </defs>
+          <path d="M20 50 V26 a12 12 0 0 1 24 0 V50 Z" fill="url(#glow-d)" stroke="#F2EDE4" stroke-opacity="0.3" stroke-width="1"/>
+          <path d="M44 50 V26 a12 12 0 0 0 -11.3 -12 L30 14.6 a16 16 0 0 1 14 15.2 V50 Z" fill="url(#leaf-d)" stroke="#FCE2B5" stroke-opacity="0.5" stroke-width="1.2"/>
+          <line x1="37.5" y1="20" x2="37.5" y2="47" stroke="#8C5323" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="35.5" cy="36" r="2.1" fill="#FCE2B5"/>
+          <rect x="18" y="50" width="28" height="3.2" rx="1.6" fill="#3A2615"/>
+        </svg>
+      </span>
+      <span>hodor</span>
+    </div>
     <p class="eyebrow">{{.Strings.Title}}</p>
     <h1 class="service">{{.ServiceTitle}}</h1>
 

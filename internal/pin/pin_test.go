@@ -225,3 +225,25 @@ func TestPending_ExcludesApprovedAndExpired(t *testing.T) {
 		t.Errorf("Pending() should include the still-valid pending entry")
 	}
 }
+
+func TestCreate_TooManyPending(t *testing.T) {
+	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	m := New(clock)
+
+	for i := 0; i < maxPendingPins; i++ {
+		if _, err := m.Create("svc"); err != nil {
+			t.Fatalf("Create %d: %v", i, err)
+		}
+	}
+
+	if _, err := m.Create("svc"); err != ErrTooManyPending {
+		t.Errorf("Create() at limit err = %v, want ErrTooManyPending", err)
+	}
+
+	// Expired entries are purged before counting, so advancing past the
+	// TTL frees up room again.
+	clock.t = clock.t.Add(ttl + time.Minute)
+	if _, err := m.Create("svc"); err != nil {
+		t.Errorf("Create() after expiry: %v", err)
+	}
+}

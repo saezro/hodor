@@ -122,8 +122,8 @@ func cmdServe(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	httpPublic := &http.Server{Addr: cfg.Listen.Public, Handler: publicSrv}
-	httpAdmin := &http.Server{Addr: cfg.Listen.Admin, Handler: adminSrv}
+	httpPublic := &http.Server{Addr: cfg.Listen.Public, Handler: publicSrv, ReadHeaderTimeout: 10 * time.Second}
+	httpAdmin := &http.Server{Addr: cfg.Listen.Admin, Handler: adminSrv, ReadHeaderTimeout: 10 * time.Second}
 
 	errc := make(chan error, 2)
 	go func() {
@@ -217,7 +217,7 @@ func fetchCSRF(cfg *config.Config) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var out admin.CSRFResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", err
@@ -244,7 +244,7 @@ func cmdOpen(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return apiError(resp)
 	}
@@ -270,7 +270,7 @@ func cmdClose(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return apiError(resp)
 	}
@@ -292,7 +292,7 @@ func cmdStatus(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return apiError(resp)
 	}

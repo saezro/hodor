@@ -1,7 +1,9 @@
 /* panel.css — hodor admin panel. Identity: ink/paper + amber accent,
    Inter for text, JetBrains Mono for codes/timestamps/durations.
    Tokens: --raw-* primitives -> semantic (--color-*, --action-*) ->
-   component. Only semantics change under prefers-color-scheme. */
+   component. Dark is ALWAYS the default surface, regardless of OS
+   preference. Light only applies under an explicit [data-theme="light"]
+   (no toggle wired yet). Only semantics change between the two. */
 
 :root {
   --raw-ink: #1C1B19;
@@ -20,6 +22,28 @@
   --radius-md: 12px;
   --radius-lg: 18px;
 
+  --color-bg: #15130F;
+  --color-surface: #1C1B19;
+  --color-surface-sunken: #1F1D19;
+  --color-text: #F2EDE4;
+  --color-text-muted: #a39d91;
+  --color-border: rgba(242, 237, 228, 0.12);
+  --color-border-strong: rgba(242, 237, 228, 0.22);
+
+  --action-primary: var(--raw-amber-glow);
+  --action-primary-text: #15130F;
+  --action-primary-hover: var(--raw-amber);
+
+  --status-open-bg: rgba(123, 196, 127, 0.14);
+  --status-open-fg: #7bc47f;
+  --status-closed-bg: rgba(224, 112, 94, 0.16);
+  --status-closed-fg: #e0705e;
+
+  --focus-ring: var(--raw-amber-glow);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 32px -16px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="light"] {
   --color-bg: var(--raw-paper);
   --color-surface: #ffffff;
   --color-surface-sunken: #F1EEE7;
@@ -41,32 +65,9 @@
   --shadow-card: 0 1px 2px rgba(28, 27, 25, 0.04), 0 10px 24px -12px rgba(28, 27, 25, 0.14);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #15130F;
-    --color-surface: #1C1B19;
-    --color-surface-sunken: #1F1D19;
-    --color-text: #F2EDE4;
-    --color-text-muted: #a39d91;
-    --color-border: rgba(242, 237, 228, 0.12);
-    --color-border-strong: rgba(242, 237, 228, 0.22);
-
-    --action-primary: var(--raw-amber-glow);
-    --action-primary-text: #15130F;
-    --action-primary-hover: var(--raw-amber);
-
-    --status-open-bg: rgba(123, 196, 127, 0.14);
-    --status-open-fg: #7bc47f;
-    --status-closed-bg: rgba(224, 112, 94, 0.16);
-    --status-closed-fg: #e0705e;
-
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 32px -16px rgba(0, 0, 0, 0.5);
-  }
-}
-
 * { box-sizing: border-box; }
 
-html { color-scheme: light dark; }
+html { color-scheme: dark; }
 
 body {
   margin: 0;
@@ -95,13 +96,8 @@ body {
 }
 
 .brand { display: flex; align-items: center; gap: 0.55rem; }
-.brand-mark { display: inline-flex; width: 28px; height: 28px; }
-.brand-mark .logo-light { display: block; }
-.brand-mark .logo-dark { display: none; }
-@media (prefers-color-scheme: dark) {
-  .brand-mark .logo-light { display: none; }
-  .brand-mark .logo-dark { display: block; }
-}
+.brand-mark { display: inline-flex; width: 32px; height: 32px; }
+.brand-mark svg { display: block; width: 100%; height: 100%; }
 .brand h1 { margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -0.01em; }
 
 .sr-only {

@@ -70,7 +70,8 @@ type OnDeny string
 const (
 	// OnDenyRedirect redirects denied requests to the closed page.
 	OnDenyRedirect OnDeny = "redirect"
-	OnDeny401      OnDeny = "401"
+	// OnDeny401 responds to denied requests with a bare 401.
+	OnDeny401 OnDeny = "401"
 )
 
 // Service is one proxied/guarded service.
@@ -97,7 +98,8 @@ type ServiceAuth struct {
 
 const (
 	// ModeProxy reverse-proxies the service through hodor.
-	ModeProxy       = "proxy"
+	ModeProxy = "proxy"
+	// ModeForwardAuth guards the service via forward-auth instead of proxying it.
 	ModeForwardAuth = "forwardauth"
 )
 

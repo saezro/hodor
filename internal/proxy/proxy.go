@@ -81,7 +81,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
-func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
 }
@@ -176,14 +176,15 @@ func (s *Server) cookieSecure(r *http.Request) bool {
 }
 
 func newReverseProxy(upstream *url.URL) *httputil.ReverseProxy {
-	rp := httputil.NewSingleHostReverseProxy(upstream)
-	rp.FlushInterval = -1 // SSE/streaming flush-through.
-	//nolint:staticcheck // Director (not Rewrite) keeps this a minimal wrap of the stdlib default; revisit if ReverseProxy.Rewrite is adopted more broadly here.
-	origDirector := rp.Director
-	rp.Director = func(r *http.Request) {
-		stripHodorCookies(r)
-		origDirector(r)
+	rp := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			stripHodorCookies(pr.Out)
+			pr.SetURL(upstream)
+			pr.Out.Host = pr.In.Host // keep client Host, as the old Director did.
+			pr.SetXForwarded()
+		},
 	}
+	rp.FlushInterval = -1 // SSE/streaming flush-through.
 	return rp
 }
 

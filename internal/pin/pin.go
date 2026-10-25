@@ -26,7 +26,17 @@ var ErrAmbiguous = errors.New("pin: code matches more than one pending PIN")
 // after maxCodeAttempts tries.
 var errCodeExhausted = errors.New("pin: could not generate a unique code")
 
+// ErrTooManyPending is returned by Create when there are already
+// maxPendingPins non-expired entries, to bound memory and prevent abuse
+// from a flood of PIN requests.
+var ErrTooManyPending = errors.New("pin: too many pending PINs")
+
 const ttl = 10 * time.Minute
+
+// maxPendingPins bounds how many non-expired entries Create allows at
+// once (expired ones are purged before counting, so this only limits
+// genuinely live PINs).
+const maxPendingPins = 100
 
 // maxCodeAttempts bounds retries when Create regenerates a colliding
 // code; with a 6-digit space and few pending PINs at once, collisions
@@ -82,6 +92,10 @@ func (m *Manager) Create(service string) (*Entry, error) {
 	defer m.mu.Unlock()
 	now := m.clock.Now()
 	m.gcLocked(now)
+
+	if len(m.byID) >= maxPendingPins {
+		return nil, ErrTooManyPending
+	}
 
 	var code string
 	for attempt := 0; ; attempt++ {

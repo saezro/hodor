@@ -5,17 +5,21 @@
       <stop offset="0" stop-color="#F2B766"/>
       <stop offset="1" stop-color="#C97A2E"/>
     </linearGradient>
+    <linearGradient id="glow-d" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FCE2B5"/>
+      <stop offset="1" stop-color="#F2B766"/>
+    </linearGradient>
   </defs>
 
   <!-- frame: rounded square card, dark -->
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#15130F"/>
   <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="13.25" fill="none" stroke="#F2EDE4" stroke-opacity="0.12" stroke-width="1.5"/>
 
-  <!-- doorway opening -->
-  <path d="M20 50 V26 a12 12 0 0 1 24 0 V50 Z" fill="#0A0906"/>
+  <!-- doorway opening: lit, warm light spilling out through the open door -->
+  <path d="M20 50 V26 a12 12 0 0 1 24 0 V50 Z" fill="url(#glow-d)" stroke="#F2EDE4" stroke-opacity="0.3" stroke-width="1"/>
 
   <!-- door leaf swung open on its hinge -->
-  <path d="M44 50 V26 a12 12 0 0 0 -11.3 -12 L30 14.6 a16 16 0 0 1 14 15.2 V50 Z" fill="url(#leaf-d)"/>
+  <path d="M44 50 V26 a12 12 0 0 0 -11.3 -12 L30 14.6 a16 16 0 0 1 14 15.2 V50 Z" fill="url(#leaf-d)" stroke="#FCE2B5" stroke-opacity="0.5" stroke-width="1.2"/>
 
   <!-- plank line -->
   <line x1="37.5" y1="20" x2="37.5" y2="47" stroke="#8C5323" stroke-width="1.6" stroke-linecap="round"/>
@@ -24,5 +28,5 @@
   <circle cx="35.5" cy="36" r="2.1" fill="#FCE2B5"/>
 
   <!-- threshold -->
-  <rect x="18" y="50" width="28" height="3.2" rx="1.6" fill="#0A0906"/>
+  <rect x="18" y="50" width="28" height="3.2" rx="1.6" fill="#3A2615"/>
 </svg>

@@ -57,7 +57,7 @@ func newProxyTestServer(t *testing.T, cfg *config.Config) (*Server, *state.Store
 }
 
 func TestHandleDefault_UnknownHost(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(upstreamBody))
 	}))
 	defer upstream.Close()
@@ -76,7 +76,7 @@ func TestHandleDefault_UnknownHost(t *testing.T) {
 }
 
 func TestHandleDefault_ClosedThenOpen(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(upstreamBody))
 	}))
 	defer upstream.Close()
@@ -150,7 +150,7 @@ func TestHandleDefault_StripsHodorCookiesBeforeUpstream(t *testing.T) {
 // Hijack, no external library) and echoes one line back prefixed with
 // "echo:", to exercise httputil.ReverseProxy's raw-tunnel Upgrade
 // handling end-to-end through the proxy.
-func wsEchoHandler(w http.ResponseWriter, r *http.Request) {
+func wsEchoHandler(w http.ResponseWriter, _ *http.Request) {
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "no hijack", http.StatusInternalServerError)

@@ -82,13 +82,53 @@ func TestClientIP_TrustedProxy_TwoHops_SkipsBothTrustedProxies(t *testing.T) {
 	}
 }
 
-func TestClientIP_TrustedProxy_AllHopsTrusted_FallsBackToLeftmost(t *testing.T) {
+func TestClientIP_TrustedProxy_AllHopsTrusted_FallsBackToRightmost(t *testing.T) {
 	trusted := parseCIDRs(t, "10.0.0.0/8")
 	r := &http.Request{RemoteAddr: "10.0.0.2:1234", Header: http.Header{}}
 	r.Header.Set("X-Forwarded-For", "10.0.0.3, 10.0.0.1")
 	ip := ClientIP(r, trusted, "X-Forwarded-For")
-	if ip == nil || ip.String() != "10.0.0.3" {
-		t.Errorf("ClientIP() = %v, want 10.0.0.3 (leftmost when every hop is a trusted proxy)", ip)
+	// The leftmost entry (10.0.0.3) is still client-supplied and must
+	// never be trusted just because every entry happens to also be a
+	// trusted proxy's address; the rightmost one is the last hop a
+	// trusted proxy actually appended.
+	if ip == nil || ip.String() != "10.0.0.1" {
+		t.Errorf("ClientIP() = %v, want 10.0.0.1 (rightmost when every hop is a trusted proxy, never leftmost)", ip)
+	}
+}
+
+func TestClientIP_TrustedProxy_UnparseableRightmostEntry_FallsBackToRemote(t *testing.T) {
+	trusted := parseCIDRs(t, "10.0.0.0/8")
+	r := &http.Request{RemoteAddr: "10.0.0.1:1234", Header: http.Header{}}
+	r.Header.Set("X-Forwarded-For", "203.0.113.9, not-an-ip")
+	ip := ClientIP(r, trusted, "X-Forwarded-For")
+	if ip == nil || ip.String() != "10.0.0.1" {
+		t.Errorf("ClientIP() = %v, want 10.0.0.1 (garbage rightmost entry stops the walk, falls back to remote)", ip)
+	}
+}
+
+func TestClientIP_TrustedProxy_UnparseableEntryMidChain_StopsAtLastTrustedHop(t *testing.T) {
+	trusted := parseCIDRs(t, "10.0.0.0/8")
+	r := &http.Request{RemoteAddr: "10.0.0.2:1234", Header: http.Header{}}
+	// Rightmost entry (10.0.0.1) is a trusted hop; next one to its left
+	// is garbage (e.g. an injected "ip:port" value). The walk must stop
+	// there instead of skipping past it to the real entry beneath.
+	r.Header.Set("X-Forwarded-For", "203.0.113.9, 1.2.3.4:5678, 10.0.0.1")
+	ip := ClientIP(r, trusted, "X-Forwarded-For")
+	if ip == nil || ip.String() != "10.0.0.1" {
+		t.Errorf("ClientIP() = %v, want 10.0.0.1 (last trusted hop seen before the unparseable entry)", ip)
+	}
+}
+
+func TestClientIP_TrustedProxy_RepeatedHeaderLines_Joined(t *testing.T) {
+	trusted := parseCIDRs(t, "10.0.0.0/8")
+	r := &http.Request{RemoteAddr: "10.0.0.1:1234", Header: http.Header{}}
+	// Two separate X-Forwarded-For header lines, as net/http.Header.Add
+	// would produce; Header.Get would only see the first one.
+	r.Header.Add("X-Forwarded-For", "203.0.113.9")
+	r.Header.Add("X-Forwarded-For", "10.0.0.1")
+	ip := ClientIP(r, trusted, "X-Forwarded-For")
+	if ip == nil || ip.String() != "203.0.113.9" {
+		t.Errorf("ClientIP() = %v, want 203.0.113.9 (values from every X-Forwarded-For line joined)", ip)
 	}
 }
 

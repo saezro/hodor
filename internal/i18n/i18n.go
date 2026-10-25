@@ -10,6 +10,7 @@ type Lang string
 const (
 	// EN is English.
 	EN Lang = "en"
+	// ES is Spanish.
 	ES Lang = "es"
 )
 

@@ -10,7 +10,7 @@ import (
 	"github.com/saezro/hodor/internal/pin"
 )
 
-func (s *Server) handleCSRF(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCSRF(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, CSRFResponse{Token: s.csrfToken})
 }
 
@@ -39,7 +39,7 @@ func (s *Server) resolveKey(name string) (string, bool) {
 	return "", false
 }
 
-func (s *Server) handleServicesList(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleServicesList(w http.ResponseWriter, _ *http.Request) {
 	out := make([]ServiceView, 0, len(s.cfg.Services))
 	for i := range s.cfg.Services {
 		svc := &s.cfg.Services[i]
@@ -109,7 +109,7 @@ func (s *Server) handleServiceClose(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) handlePinsList(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePinsList(w http.ResponseWriter, _ *http.Request) {
 	entries := s.pins.Pending()
 	out := make([]PinView, 0, len(entries))
 	for _, e := range entries {
@@ -152,7 +152,7 @@ func (s *Server) handlePinsApprove(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handlePassesList(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePassesList(w http.ResponseWriter, _ *http.Request) {
 	passes := s.state.Passes()
 	out := make([]PassView, 0, len(passes))
 	for _, p := range passes {
@@ -182,7 +182,7 @@ func (s *Server) handlePassRevoke(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) handleEventsList(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleEventsList(w http.ResponseWriter, _ *http.Request) {
 	events := s.state.Events()
 	out := make([]EventView, 0, len(events))
 	for _, e := range events {

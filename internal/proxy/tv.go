@@ -2,10 +2,12 @@ package proxy
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"time"
 
 	"github.com/saezro/hodor/internal/auth"
+	"github.com/saezro/hodor/internal/pin"
 	"github.com/saezro/hodor/internal/web"
 )
 
@@ -22,6 +24,22 @@ const (
 	tvPinLimitWindow = time.Minute
 )
 
+// tvPinLimitKey normalizes ip to the limiter key for its address family:
+// a /32 (the full address) for IPv4, a /64 for IPv6. A single IPv6 user
+// is commonly handed an entire /64 (or larger) by their ISP and can
+// cycle through addresses within it per request, so keying on the exact
+// address would let them bypass the limiter just by hopping within
+// their own prefix; IPv4 addresses are scarce enough (and usually
+// NATed, so a /32 is already shared by many devices) that narrowing
+// further would be too easy to abuse the other way.
+func tvPinLimitKey(ip net.IP) string {
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String()
+	}
+	mask := net.CIDRMask(64, 128)
+	return ip.Mask(mask).String()
+}
+
 // handleTV serves GET /tv: the device-pairing page for keyboard-less
 // screens. The service is resolved from the Host header, same as the
 // closed page, since the device visits https://<host>/tv.
@@ -35,7 +53,7 @@ func (s *Server) handleTV(w http.ResponseWriter, r *http.Request) {
 	ip := auth.ClientIP(r, s.cfg.Public.ParsedProxies, "X-Forwarded-For")
 	key := ""
 	if ip != nil {
-		key = ip.String()
+		key = tvPinLimitKey(ip)
 	}
 	if !tvPinLimit.Allow(key) {
 		http.Error(w, "too many pin requests", http.StatusTooManyRequests)
@@ -43,6 +61,10 @@ func (s *Server) handleTV(w http.ResponseWriter, r *http.Request) {
 	}
 
 	entry, err := s.pins.Create(svc.Name)
+	if err == pin.ErrTooManyPending {
+		http.Error(w, "service busy", http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
 		http.Error(w, "could not create pin", http.StatusInternalServerError)
 		return

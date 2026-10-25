@@ -19,11 +19,23 @@ Data: internal/web.ClosedData
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="dark">
   <meta name="robots" content="noindex, nofollow">
   <title>{{.ServiceTitle}} — {{.Strings.Title}}</title>
   <style>
     :root {
+      --paper: #15130F;
+      --ink: #F2EDE4;
+      --ink-muted: #a39d91;
+      --border: rgba(242, 237, 228, 0.12);
+      --card: #1C1B19;
+      --accent: {{if .AccentColor}}{{.AccentColor}}{{else}}#F2B766{{end}};
+      --accent-contrast: #15130F;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 20px 40px -16px rgba(0, 0, 0, 0.55);
+      --radius-lg: 20px;
+      --radius-md: 12px;
+    }
+    :root[data-theme="light"] {
       --paper: #FAF8F4;
       --ink: #1C1B19;
       --ink-muted: #6b6760;
@@ -32,19 +44,6 @@ Data: internal/web.ClosedData
       --accent: {{if .AccentColor}}{{.AccentColor}}{{else}}#C97A2E{{end}};
       --accent-contrast: #FAF8F4;
       --shadow: 0 1px 2px rgba(28, 27, 25, 0.04), 0 12px 32px -12px rgba(28, 27, 25, 0.18);
-      --radius-lg: 20px;
-      --radius-md: 12px;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --paper: #15130F;
-        --ink: #F2EDE4;
-        --ink-muted: #a39d91;
-        --border: rgba(242, 237, 228, 0.12);
-        --card: #1C1B19;
-        --accent-contrast: #15130F;
-        --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 20px 40px -16px rgba(0, 0, 0, 0.55);
-      }
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
@@ -62,12 +61,6 @@ Data: internal/web.ClosedData
       padding: 2.75rem 2rem 2.25rem;
     }
     .logo { width: 4rem; height: 4rem; margin: 0 auto 1.5rem; display: block; }
-    .logo.fallback-light { display: block; }
-    .logo.fallback-dark { display: none; }
-    @media (prefers-color-scheme: dark) {
-      .logo.fallback-light { display: none; }
-      .logo.fallback-dark { display: block; }
-    }
     .eyebrow {
       font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
       color: var(--ink-muted); margin: 0 0 0.6rem;
@@ -104,25 +97,16 @@ Data: internal/web.ClosedData
     {{if .LogoURL}}
       <img class="logo" src="{{.LogoURL}}" alt="" loading="eager">
     {{else}}
-      <svg class="logo fallback-light" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="hodor" xmlns="http://www.w3.org/2000/svg">
-        <defs><linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E29A4E"/><stop offset="1" stop-color="#B9712B"/></linearGradient></defs>
-        <rect x="2" y="2" width="60" height="60" rx="14" fill="#FAF8F4"/>
-        <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="13.25" fill="none" stroke="#1C1B19" stroke-opacity="0.08" stroke-width="1.5"/>
-        <path d="M20 50 V26 a12 12 0 0 1 24 0 V50 Z" fill="#1C1B19"/>
-        <path d="M44 50 V26 a12 12 0 0 0 -11.3 -12 L30 14.6 a16 16 0 0 1 14 15.2 V50 Z" fill="url(#leaf)"/>
-        <line x1="37.5" y1="20" x2="37.5" y2="47" stroke="#8C5323" stroke-width="1.6" stroke-linecap="round"/>
-        <circle cx="35.5" cy="36" r="2.1" fill="#F2B766"/>
-        <rect x="18" y="50" width="28" height="3.2" rx="1.6" fill="#1C1B19"/>
-      </svg>
-      <svg class="logo fallback-dark" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="hodor" xmlns="http://www.w3.org/2000/svg">
-        <defs><linearGradient id="leaf-d" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F2B766"/><stop offset="1" stop-color="#C97A2E"/></linearGradient></defs>
-        <rect x="2" y="2" width="60" height="60" rx="14" fill="#15130F"/>
-        <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="13.25" fill="none" stroke="#F2EDE4" stroke-opacity="0.12" stroke-width="1.5"/>
-        <path d="M20 50 V26 a12 12 0 0 1 24 0 V50 Z" fill="#0A0906"/>
-        <path d="M44 50 V26 a12 12 0 0 0 -11.3 -12 L30 14.6 a16 16 0 0 1 14 15.2 V50 Z" fill="url(#leaf-d)"/>
+      <svg class="logo" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="hodor" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="leaf-d" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F2B766"/><stop offset="1" stop-color="#C97A2E"/></linearGradient>
+          <linearGradient id="glow-d" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FCE2B5"/><stop offset="1" stop-color="#F2B766"/></linearGradient>
+        </defs>
+        <path d="M20 50 V26 a12 12 0 0 1 24 0 V50 Z" fill="url(#glow-d)" stroke="#F2EDE4" stroke-opacity="0.3" stroke-width="1"/>
+        <path d="M44 50 V26 a12 12 0 0 0 -11.3 -12 L30 14.6 a16 16 0 0 1 14 15.2 V50 Z" fill="url(#leaf-d)" stroke="#FCE2B5" stroke-opacity="0.5" stroke-width="1.2"/>
         <line x1="37.5" y1="20" x2="37.5" y2="47" stroke="#8C5323" stroke-width="1.6" stroke-linecap="round"/>
         <circle cx="35.5" cy="36" r="2.1" fill="#FCE2B5"/>
-        <rect x="18" y="50" width="28" height="3.2" rx="1.6" fill="#0A0906"/>
+        <rect x="18" y="50" width="28" height="3.2" rx="1.6" fill="#3A2615"/>
       </svg>
     {{end}}
     <p class="eyebrow">hodor</p>
