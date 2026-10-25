@@ -291,6 +291,107 @@ button.danger:hover { background: var(--status-closed-bg); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 
+.badge.base { background: var(--color-surface-sunken); color: var(--color-text-muted); border: 1px solid var(--color-border-strong); }
+
+/* ---- Settings tab: services/durations/keys/reload blocks, plus the
+   <dialog>s used for service/key create-edit and the key-reveal-once
+   modal (see panel.html + panel.js). ---- */
+
+.settings-block { margin-bottom: 1.75rem; }
+.settings-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.settings-block h3 { margin: 0; font-size: 0.95rem; font-weight: 650; }
+
+.row.settings-row { align-items: flex-start; }
+.row .source-note { color: var(--color-text-muted); font-size: 0.78rem; font-family: var(--font-mono); }
+
+.inline-form { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.durations-input { flex: 1 1 16rem; font-family: var(--font-mono); }
+
+.field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.85rem; }
+.field label { font-size: 0.8rem; color: var(--color-text-muted); font-weight: 600; }
+.field input, .field select, .field textarea { width: 100%; }
+.field textarea { font-family: var(--font-mono); font-size: 0.82rem; resize: vertical; }
+
+.checkbox-field { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.85rem; font-size: 0.88rem; }
+.checkbox-field input { width: auto; min-height: 0; padding: 0; }
+
+.actions-fieldset {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+  margin: 0 0 0.85rem;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.actions-fieldset legend { font-size: 0.8rem; color: var(--color-text-muted); font-weight: 600; padding: 0 0.3rem; }
+.actions-fieldset label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; }
+.actions-fieldset input { width: auto; min-height: 0; padding: 0; }
+
+.field-error {
+  color: var(--status-closed-fg);
+  background: var(--status-closed-bg);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.82rem;
+  margin: 0 0 0.85rem;
+}
+
+.dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
+
+.reload-warnings {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.reload-warnings li {
+  color: var(--status-closed-fg);
+  background: var(--status-closed-bg);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.key-reveal {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.key-reveal code {
+  flex: 1 1 auto;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.65rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.hodor-dialog {
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-card);
+  padding: 1.25rem;
+}
+.hodor-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+.hodor-dialog h3 { margin: 0 0 1rem; font-size: 1rem; }
+
 @media (min-width: 640px) {
   main#app { padding-top: 1.5rem; }
   .row { padding: 1rem 1.25rem; }

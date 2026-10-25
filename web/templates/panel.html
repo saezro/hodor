@@ -16,7 +16,17 @@ Data: internal/web.PanelData
 Tabs: the nav links are the only visible section title (no duplicate <h2>
 underneath); each <section> keeps a visually-hidden <h2> for a11y via
 aria-labelledby. panel.js shows exactly one section at a time and toggles
-`hidden` + .is-active; all four still poll/load in the background.
+`hidden` + .is-active; all five still poll/load in the background (Settings
+loads lazily, on first visit to that tab, since GET /api/config is the
+only one of the five that never changes from another browser tab).
+
+Settings dialogs (service/key create-edit, key-reveal-once) are plain
+<dialog> elements right after </main>, styled, not polyfilled: every
+browser hodor targets has native <dialog> (showModal/::backdrop/Esc-to-
+close for free, no focus-trap library needed). All their labels and
+button text are set by panel.js from STR (see panel.js), same as the
+other four sections' dynamically-built rows — kept out of the Go
+template so i18n.go doesn't grow a few dozen more rarely-touched keys.
 
 Note: the CSRF token and durations are passed to panel.js via a JSON
 <script type="application/json"> data island (#hodor-data) instead of an
@@ -61,6 +71,7 @@ be silently blocked by the browser. panel.js reads the island by id.
       <a href="#pins" class="tab-link" data-tab="pins">{{.Strings.TabPins}}<span class="count-badge" id="pins-count" hidden>0</span></a>
       <a href="#passes" class="tab-link" data-tab="passes">{{.Strings.TabPasses}}</a>
       <a href="#events" class="tab-link" data-tab="events">{{.Strings.TabEvents}}</a>
+      <a href="#settings" class="tab-link" data-tab="settings">{{.Strings.TabSettings}}</a>
     </nav>
 
     <section id="services" class="panel-section" aria-labelledby="services-h">
@@ -95,7 +106,147 @@ be silently blocked by the browser. panel.js reads the island by id.
         <div class="skeleton-row"></div>
       </div>
     </section>
+
+    <section id="settings" class="panel-section" aria-labelledby="settings-h" hidden>
+      <h2 id="settings-h" class="sr-only">{{.Strings.TabSettings}}</h2>
+      <p class="section-hint">{{.Strings.HintSettings}}</p>
+
+      <div class="settings-block">
+        <div class="settings-block-head">
+          <h3 id="settings-services-h"></h3>
+          <button class="primary" type="button" id="service-add-btn"></button>
+        </div>
+        <div id="settings-services-list" class="list" aria-busy="true">
+          <div class="skeleton-row"></div>
+        </div>
+      </div>
+
+      <div class="settings-block">
+        <h3 id="settings-durations-h"></h3>
+        <form id="durations-form" class="inline-form">
+          <input type="text" id="durations-input" class="durations-input">
+          <button class="primary" type="submit" id="durations-save-btn"></button>
+        </form>
+      </div>
+
+      <div class="settings-block">
+        <div class="settings-block-head">
+          <h3 id="settings-keys-h"></h3>
+          <button class="primary" type="button" id="key-add-btn"></button>
+        </div>
+        <div id="settings-keys-list" class="list" aria-busy="true">
+          <div class="skeleton-row"></div>
+        </div>
+      </div>
+
+      <div class="settings-block">
+        <div class="settings-block-head">
+          <h3 id="settings-reload-h"></h3>
+          <button type="button" id="reload-btn"></button>
+        </div>
+        <ul id="reload-warnings" class="reload-warnings" hidden></ul>
+      </div>
+    </section>
   </main>
+
+  <dialog id="service-dialog" class="hodor-dialog">
+    <form id="service-form" method="dialog">
+      <h3 id="service-dialog-title"></h3>
+      <div class="field">
+        <label for="svc-name" id="svc-name-label"></label>
+        <input id="svc-name" type="text" pattern="[a-z0-9-]+" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="svc-title" id="svc-title-label"></label>
+        <input id="svc-title" type="text" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="svc-hosts" id="svc-hosts-label"></label>
+        <input id="svc-hosts" type="text" autocomplete="off" placeholder="geo.lan, geo.local">
+      </div>
+      <div class="field">
+        <label for="svc-mode" id="svc-mode-label"></label>
+        <select id="svc-mode">
+          <option value="proxy">proxy</option>
+          <option value="forwardauth">forwardauth</option>
+        </select>
+      </div>
+      <div class="field" id="svc-upstream-field">
+        <label for="svc-upstream" id="svc-upstream-label"></label>
+        <input id="svc-upstream" type="text" autocomplete="off" placeholder="http://127.0.0.1:5000">
+      </div>
+      <div class="field">
+        <label for="svc-group" id="svc-group-label"></label>
+        <input id="svc-group" type="text" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="svc-accent" id="svc-accent-label"></label>
+        <input id="svc-accent" type="text" autocomplete="off" placeholder="#C97A2E">
+      </div>
+      <div class="field">
+        <label for="svc-message" id="svc-message-label"></label>
+        <input id="svc-message" type="text" autocomplete="off">
+      </div>
+      <label class="checkbox-field">
+        <input id="svc-bypass" type="checkbox">
+        <span id="svc-bypass-label"></span>
+      </label>
+      <p class="field-error" id="service-form-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="service-cancel-btn"></button>
+        <button type="submit" class="primary" id="service-save-btn"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="key-dialog" class="hodor-dialog">
+    <form id="key-form" method="dialog">
+      <h3 id="key-dialog-title"></h3>
+      <div class="field">
+        <label for="key-name" id="key-name-label"></label>
+        <input id="key-name" type="text" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="key-services" id="key-services-label"></label>
+        <input id="key-services" type="text" autocomplete="off" placeholder="geo, tv">
+      </div>
+      <fieldset class="actions-fieldset">
+        <legend id="key-actions-legend"></legend>
+        <label><input type="checkbox" id="key-action-open" value="open"> open</label>
+        <label><input type="checkbox" id="key-action-close" value="close"> close</label>
+        <label><input type="checkbox" id="key-action-status" value="status"> status</label>
+      </fieldset>
+      <div class="field">
+        <label for="key-origins" id="key-origins-label"></label>
+        <input id="key-origins" type="text" autocomplete="off" placeholder="https://geo.lan">
+      </div>
+      <p class="field-error" id="key-form-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="key-cancel-btn"></button>
+        <button type="submit" class="primary" id="key-save-btn"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="key-result-dialog" class="hodor-dialog">
+    <h3 id="key-result-title"></h3>
+    <p id="key-result-warning" class="field-error" role="alert"></p>
+    <div class="field">
+      <label for="key-result-value" id="key-result-value-label"></label>
+      <div class="key-reveal">
+        <code id="key-result-value"></code>
+        <button type="button" id="key-result-copy-btn"></button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="key-result-snippet" id="key-result-snippet-label"></label>
+      <textarea id="key-result-snippet" readonly rows="4"></textarea>
+      <button type="button" id="key-result-snippet-copy-btn"></button>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="primary" id="key-result-close-btn"></button>
+    </div>
+  </dialog>
 
   <div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
 

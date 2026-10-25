@@ -112,10 +112,12 @@ type PanelStrings struct {
 	TabPins      string
 	TabPasses    string
 	TabEvents    string
+	TabSettings  string
 	HintServices string
 	HintPins     string
 	HintPasses   string
 	HintEvents   string
+	HintSettings string
 }
 
 // PanelData is the view model for panel.html.
@@ -142,10 +144,12 @@ func NewPanelData(lang i18n.Lang, csrfToken string, durations []string) PanelDat
 			TabPins:      i18n.T(lang, "panel.tab.pins"),
 			TabPasses:    i18n.T(lang, "panel.tab.passes"),
 			TabEvents:    i18n.T(lang, "panel.tab.events"),
+			TabSettings:  i18n.T(lang, "panel.tab.settings"),
 			HintServices: i18n.T(lang, "panel.hint.services"),
 			HintPins:     i18n.T(lang, "panel.hint.pins"),
 			HintPasses:   i18n.T(lang, "panel.hint.passes"),
 			HintEvents:   i18n.T(lang, "panel.hint.events"),
+			HintSettings: i18n.T(lang, "panel.hint.settings"),
 		},
 	}
 }

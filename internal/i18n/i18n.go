@@ -86,6 +86,14 @@ var strings = map[string]map[Lang]string{
 		EN: "Last 200 changes, most recent first.",
 		ES: "Últimos 200 cambios, el más reciente primero.",
 	},
+	"panel.tab.settings": {
+		EN: "Settings",
+		ES: "Configuración",
+	},
+	"panel.hint.settings": {
+		EN: "Services, open-for durations and API keys. Base config stays read-only here; changes go to the overlay.",
+		ES: "Servicios, duraciones de apertura y claves de API. La configuración base queda de solo lectura aquí; los cambios van al overlay.",
+	},
 }
 
 // T returns the translated string for key in lang, falling back to EN and
