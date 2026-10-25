@@ -15,6 +15,16 @@ type ServiceView struct {
 	OpenedBy string     `json:"opened_by,omitempty"`
 }
 
+// ServiceV1View is the JSON shape of GET /api/v1/services/{name}: the
+// same fields as ServiceView (kept separate so `hodor status`, which
+// decodes ServiceView, is unaffected) plus the configured open-for
+// durations, so an embed consumer can build its own open control
+// without a second request.
+type ServiceV1View struct {
+	ServiceView
+	Durations []string `json:"durations"`
+}
+
 // PinView is the JSON shape of one entry in GET /api/pins.
 type PinView struct {
 	SessionID string    `json:"session_id"`

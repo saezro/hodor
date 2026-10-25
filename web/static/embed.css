@@ -1,0 +1,16 @@
+/* embed.css — iframe host page for /embed/{service} (web/templates/embed.html).
+   Only resets the page chrome around the <hodor-button> custom element;
+   the button's own look lives in the Shadow DOM style inside embed.js so
+   it can't leak into or be leaked on by the parent page. Transparent
+   background lets the host page show through the iframe. */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}

@@ -1,0 +1,25 @@
+{{/*
+Template: embed.html
+Rendered by Go (html/template) at GET /embed/{service}?k=<key> on the
+admin listener, for the iframe embed mode (docs/embed.md). Data:
+  .Service  string  service name, goes straight into data-service
+  .Key      string  the bearer key for this embed (scoped, see docs/embed.md)
+  .Lang     string  "es" or "en", goes into <html lang> and data-lang
+No inline <script> or <style>: CSP on this response is
+`default-src 'self'; frame-ancestors <key.allow_origins>` (set by the Go
+handler, not here) and inline would be blocked anyway. Background stays
+transparent so the host page's page shows through around the button.
+*/ -}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>hodor</title>
+  <link rel="stylesheet" href="/static/embed.css">
+</head>
+<body>
+  <script src="/static/embed.js" data-service="{{.Service}}" data-key="{{.Key}}" data-lang="{{.Lang}}" defer></script>
+</body>
+</html>

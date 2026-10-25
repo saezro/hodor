@@ -269,7 +269,7 @@ func (s *Server) handleV1ServiceGet(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "unknown service or group"})
 		return
 	}
-	writeJSON(w, http.StatusOK, view)
+	writeJSON(w, http.StatusOK, ServiceV1View{ServiceView: view, Durations: s.cfg.Durations})
 }
 
 func (s *Server) handleV1ServiceOpen(w http.ResponseWriter, r *http.Request) {

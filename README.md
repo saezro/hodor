@@ -115,6 +115,17 @@ curl -X POST -H "Authorization: Bearer <key>" -d '{"for":"1h"}' https://hodor.la
 
 Add `allow_origins: [https://games.home.example.com]` to the key for CORS from a browser page embedding the button.
 
+## Embeddable button
+
+Want an open/close button on your homepage dashboard instead of the admin panel? Drop in `embed.js` with a scoped key:
+
+```html
+<script src="https://hodor.lan/static/embed.js"
+        data-service="geo" data-key="hdr_..." data-lang="es" defer></script>
+```
+
+No deps, no build step, Shadow DOM, i18n es/en. LAN/VPN only, same as everything else admin-side. Full guide (custom element for multiple buttons, iframe mode, key scoping): [docs/embed.md](docs/embed.md).
+
 ## forwardAuth mode
 
 Don't want hodor proxying traffic itself? Point your existing reverse proxy at `GET /auth` on hodor's public listener instead — `200` means pass, a closed service redirects (or `401`s, for nginx) to hodor's own closed page.

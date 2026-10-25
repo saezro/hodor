@@ -74,6 +74,7 @@ func New(cfg *config.Config, st *state.Store, pins *pin.Manager, secret []byte, 
 	mux.HandleFunc("GET /metrics", s.handleMetrics)
 	mux.HandleFunc("GET /", s.handlePanel)
 	mux.Handle("GET /static/", s.staticHandler())
+	mux.HandleFunc("GET /embed/{svc}", s.handleEmbed)
 
 	mux.HandleFunc("GET /api/csrf", s.handleCSRF)
 	mux.HandleFunc("GET /api/services", s.handleServicesList)

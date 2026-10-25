@@ -154,3 +154,19 @@ func NewPanelData(lang i18n.Lang, csrfToken string, durations []string) PanelDat
 func RenderPanel(w io.Writer, d PanelData) error {
 	return tmpl.ExecuteTemplate(w, "panel.html", d)
 }
+
+// EmbedData is the view model for embed.html: the tiny iframe-able
+// status/open widget served by GET /embed/{svc}. Key is passed through
+// verbatim so embed.js can call /api/v1/services/{svc} with it; it is
+// rendered via html/template, so it is escaped like any other field
+// (never trust it to be safe on its own).
+type EmbedData struct {
+	Service string
+	Key     string
+	Lang    string
+}
+
+// RenderEmbed writes embed.html for d to w.
+func RenderEmbed(w io.Writer, d EmbedData) error {
+	return tmpl.ExecuteTemplate(w, "embed.html", d)
+}
