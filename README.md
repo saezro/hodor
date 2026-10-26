@@ -51,26 +51,30 @@ hodor sits in front of those services and keeps them **closed by default**. Some
 
 ## Quick start
 
-```yaml
-# docker-compose.yml
-services:
-  hodor:
-    image: ghcr.io/saezro/hodor:latest
-    restart: unless-stopped
-    ports: ["8081:8081"]          # admin — keep this off the tunnel
-    volumes:
-      - ./hodor.yaml:/etc/hodor.yaml:ro
-      - hodor-data:/data
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    command: tunnel run
-    environment: { TUNNEL_TOKEN: ${TUNNEL_TOKEN} }
-volumes: { hodor-data: }
+```
+docker run -d --name hodor \
+  -p 8080:8080 -p 8081:8081 \
+  -v hodor-data:/data \
+  ghcr.io/saezro/hodor
 ```
 
-Point your Cloudflare Tunnel (or Traefik/Caddy/nginx) at `hodor:8080`, keep `8081` on the LAN only, and you're closed by default.
+No config file needed. Open `http://<ip-lan>:8081` → pestaña **Configuración/Settings** → añade servicios. hodor starts closed by default and stays that way until someone on the LAN opens something.
 
-### Example `hodor.yaml`
+Point your Cloudflare Tunnel (or Traefik/Caddy/nginx) at hodor's public listener (`8080`), keep `8081` on the LAN/VPN only, and you're closed by default. See [`examples/`](examples/) for ready-to-adapt compose files.
+
+### Avanzado (opcional): `hodor.yaml`
+
+Everything above also works with a hand-written base config for anything you'd rather pin outside the panel (listen addresses, the secret, services pre-provisioned at deploy time...). Startup-time env vars:
+
+| Env var | Overrides |
+|---|---|
+| `HODOR_CONFIG` | path to the base `hodor.yaml` (default `/data/hodor.yaml`) |
+| `HODOR_DATA_DIR` | directory for `state.json`/`secret`/`managed.yaml` when not set explicitly (default `/data`) |
+| `HODOR_LISTEN_PUBLIC` / `HODOR_LISTEN_ADMIN` | listener addresses |
+| `HODOR_ADMIN_ALLOW_CIDRS` | admin CIDR allowlist, comma-separated — always wins, the anti-lockout valve; set but empty/blank is a validation error |
+| `HODOR_ADMIN_TRUSTED_PROXIES` | admin listener's trusted reverse-proxy CIDRs, comma-separated — wins over `hodor.yaml`'s `admin.trusted_proxies`; set but empty/blank is a validation error |
+| `HODOR_ADMIN_TRUSTED_HEADER` | admin listener's trusted forwarded-for header name — wins over `hodor.yaml`'s `admin.trusted_header` |
+| `HODOR_SECRET` | HMAC secret value, instead of `secret_file` |
 
 ```yaml
 lang: en
@@ -98,7 +102,9 @@ services:
 
 Validate it anytime with `hodor check -c hodor.yaml`.
 
-Services, durations and API keys added from the admin panel aren't written back into `hodor.yaml`: they live in a separate `config_overlay` file (default `managed.yaml` next to `state_file`), merged on top of the base config at every request. `hodor.yaml` stays hand-owned and is never rewritten. `listen`, `secret_file` and `state_file` only ever come from the base file and are not hot-reloadable; everything else picks up changes immediately via a panel save, `SIGHUP`, or `POST /api/config/reload`.
+Ports, the secret and `state_file`/`config_overlay`'s location are not editable from the panel: they're fixed at startup (base file + env), same as above. Everything else (services, durations, api_keys, and the handful of `general` fields: `lang`, `admin_public_url`, `admin_allow_cidrs`, `admin_token`, `admin_trusted_proxies`, `admin_trusted_header`, `public_trusted_proxies`, `public_cookie_secure`, `pass_ttl`, `on_change`) can be set from the admin panel instead. Whatever a base `hodor.yaml` (or an env override, for `admin_allow_cidrs`) already sets there is read-only from the panel (`409` on write).
+
+Panel edits aren't written back into `hodor.yaml`: they live in a separate `config_overlay` file (default `managed.yaml` next to `state_file`), merged on top of the base config at every request. `hodor.yaml` stays hand-owned and is never rewritten. `listen`, `secret_file` and `state_file` only ever come from the base file and are not hot-reloadable; everything else picks up changes immediately via a panel save, `SIGHUP`, or `POST /api/config/reload`.
 
 ## API keys
 

@@ -1,3 +1,7 @@
+# hodor.yaml is optional: everything below can also be configured from
+# the admin panel instead (zero-file setup, see README.md Quick start).
+# Anything set here (or via an env override, for admin.allow_cidrs) is
+# then read-only from the panel.
 lang: es
 secret_file: /run/secrets/hodor   # 32+ bytes, used for HMAC; generated on first run if missing (0600)
 state_file: /data/state.json

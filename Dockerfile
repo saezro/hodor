@@ -11,12 +11,15 @@ RUN go mod download
 
 COPY . .
 RUN go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/hodor ./cmd/hodor
+RUN mkdir -p /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot
 
-ENV HODOR_CONFIG=/etc/hodor/hodor.yaml
+ENV HODOR_CONFIG=/data/hodor.yaml
+ENV HODOR_DATA_DIR=/data
 
 COPY --from=builder /out/hodor /hodor
+COPY --from=builder --chown=65532:65532 /out/data /data
 
 EXPOSE 8080 8081
 VOLUME ["/data"]

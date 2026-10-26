@@ -4,8 +4,10 @@
 # listener (8081) is kept off the tunnel entirely — reach it over your LAN
 # or VPN only.
 #
-# Set TUNNEL_TOKEN from your Cloudflare Zero Trust dashboard
-# (Networks > Tunnels > your tunnel > install connector) before running.
+# No hodor.yaml needed: add services from the admin panel (zero-file
+# setup, see README.md). Set TUNNEL_TOKEN from your Cloudflare Zero
+# Trust dashboard (Networks > Tunnels > your tunnel > install connector)
+# before running.
 
 services:
   hodor:
@@ -14,10 +16,7 @@ services:
     ports:
       - "8081:8081" # admin panel — LAN/VPN only, do not expose publicly
     volumes:
-      - ./hodor.yaml:/etc/hodor/hodor.yaml:ro
       - hodor-data:/data
-    environment:
-      HODOR_CONFIG: /etc/hodor/hodor.yaml
 
   cloudflared:
     image: cloudflare/cloudflared:latest

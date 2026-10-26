@@ -86,3 +86,16 @@ Goal: a custom button inside each service (or a home dashboard) opens/closes it 
 
 ### Tests
 Key scope matrix (svc/group × action), CORS allow/deny/preflight, overlay merge, invalid save leaves config untouched, concurrent reload under `-race`, embed.js served with correct headers.
+
+## Phase 3 — zero-file setup (requested 2026-10-26)
+Goal: `docker run` with no `hodor.yaml` at all is a fully working install.
+
+- Base config optional: missing file → defaults only, not an error (`Load` logs at info level). 0 services is valid now (panel adds them).
+- `dataDir()`: env `HODOR_DATA_DIR`, else `/data` (matches Dockerfile `VOLUME`). Defaults `state_file`/`secret_file`/`config_overlay` (via `state_file`'s dir) under it when unset.
+- Env always wins over base file AND overlay, every time a Config is built: `HODOR_LISTEN_PUBLIC`/`HODOR_LISTEN_ADMIN`, `HODOR_ADMIN_ALLOW_CIDRS` (comma-separated; the anti-lockout valve — works even if the panel's own `allow_cidrs` is broken).
+- New overlay section `general` (`internal/config/overlay.go` `General`/`GeneralPatch`): `lang, admin_public_url, admin_allow_cidrs, admin_token, public_trusted_proxies, public_cookie_secure, pass_ttl, on_change`. Per-field: base (or env, for `admin_allow_cidrs`) wins if set at all → that field is "locked" (`LockedGeneralFields`, computed off `LoadRaw`'s *unvalidated* base so defaults don't make everything look set); otherwise overlay applies; `Validate`'s defaults/env run last. `admin_trusted_proxies`/`admin_trusted_header` are NOT in the overlay (a spoofed client IP would bypass `allow_cidrs`): yaml or env `HODOR_ADMIN_TRUSTED_PROXIES`/`HODOR_ADMIN_TRUSTED_HEADER` only; PUT with them → 400.
+- `PUT /api/config/general` (`internal/admin/config_api.go`): partial patch, nil = untouched. Locked field touched → 409 (`GeneralLockedError`). Anti-lockout: if the resulting `admin.allow_cidrs` would exclude the caller's own IP → 400 "would lock you out" (`config.ErrLockout`), nothing written.
+- `GET /api/config.general` (`GeneralView`): effective values + `locked` list + `admin_token_set` bool — the raw token is never serialized either way.
+- Dockerfile: `ENV HODOR_CONFIG=/data/hodor.yaml`, `ENV HODOR_DATA_DIR=/data`; `/data` pre-created and chowned to nonroot (65532) in the distroless final stage so it's writable without a host bind-mount.
+- `examples/docker-compose.yml`: new minimal file, image only, no `hodor.yaml`. `examples/docker-compose.cloudflared.yml`: dropped the `hodor.yaml` mount and `HODOR_CONFIG` env — also zero-file now.
+- README Quick start leads with `docker run` + "open the panel, add services"; the yaml-based setup moved to "Avanzado (opcional)".

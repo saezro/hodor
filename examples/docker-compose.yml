@@ -1,0 +1,17 @@
+# Minimal hodor setup: no hodor.yaml at all (zero-file setup, see
+# README.md). After `docker compose up -d`, open
+# http://<host-lan-ip>:8081 and add services from the
+# Configuración/Settings tab.
+
+services:
+  hodor:
+    image: ghcr.io/saezro/hodor:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080" # public listener — proxied/guarded services
+      - "8081:8081" # admin panel — LAN/VPN only, do not expose publicly
+    volumes:
+      - hodor-data:/data
+
+volumes:
+  hodor-data:
