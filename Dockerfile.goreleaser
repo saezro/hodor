@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+# Usado por goreleaser con el binario hodor ya precompilado (sin build desde fuente).
+
+FROM busybox:1.37 AS prep
+RUN mkdir -p /out/data
+
+FROM gcr.io/distroless/static-debian12:nonroot
+
+ENV HODOR_CONFIG=/data/hodor.yaml
+ENV HODOR_DATA_DIR=/data
+
+COPY hodor /hodor
+COPY --from=prep --chown=65532:65532 /out/data /data
+
+EXPOSE 8080 8081
+VOLUME ["/data"]
+
+ENTRYPOINT ["/hodor", "serve"]
