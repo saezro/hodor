@@ -6,9 +6,9 @@
 // with their own data-service/data-key/data-lang).
 //
 // Usage:
-//   <script src="https://hodor.lan/static/embed.js" data-service="geo"
+//   <script src="https://hodor.lan/static/embed.js" data-service="jellyfin"
 //           data-key="hdr_…" data-lang="es" defer></script>
-//   or explicitly: <hodor-button data-service="geo" data-key="hdr_…"></hodor-button>
+//   or explicitly: <hodor-button data-service="jellyfin" data-key="hdr_…"></hodor-button>
 (function () {
   "use strict";
 

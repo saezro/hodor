@@ -1,4 +1,4 @@
-geo.example.com {
+jellyfin.example.com {
 	# hodor decides, per request, whether this is allowed through.
 	forward_auth hodor:8080 {
 		uri /auth
@@ -13,5 +13,5 @@ geo.example.com {
 		reverse_proxy hodor:8080
 	}
 
-	reverse_proxy geo:3469
+	reverse_proxy jellyfin:8096
 }

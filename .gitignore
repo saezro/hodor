@@ -10,7 +10,6 @@
 state.json
 *.state.json
 hodor.yaml
-!hodor.example.yaml
 !examples/**/hodor.yaml
 .env
 secrets/

@@ -1,25 +1,44 @@
-lang: en
-secret_file: /run/secrets/hodor
+# hodor.yaml is optional: everything below can also be configured from
+# the admin panel instead (zero-file setup, see README.md Quick start).
+# Anything set here (or via an env override, for admin.allow_cidrs) is
+# then read-only from the panel.
+lang: es
+secret_file: /run/secrets/hodor   # 32+ bytes, used for HMAC; generated on first run if missing (0600)
 state_file: /data/state.json
-listen:
-  public: ":8080"
-  admin: ":8081"
+# config_overlay: /data/managed.yaml   # default: "managed.yaml" next to state_file; edited by the admin panel
+#   (services/durations/api_keys only). This file is never hand-owned: don't
+#   edit hodor.yaml's own listen/secret_file/state_file and expect them to
+#   hot-reload - they don't; everything else does, via SIGHUP or
+#   POST /api/config/reload.
+listen: { public: ":8080", admin: ":8081" }
 admin:
   allow_cidrs: [192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, 127.0.0.0/8]
-  public_url: https://games.home.example.com
+  public_url: https://media.home.example.com
 durations: [1h, 3h, 6h, 24h]
 services:
-  - name: geo
-    title: Homemade GeoGuessr
-    hosts: [geo.example.com]
+  - name: jellyfin
+    title: Jellyfin
+    hosts: [jellyfin.example.com]
     mode: proxy
-    upstream: http://geo:3469
-    group: games
+    upstream: http://jellyfin:8096
+    group: media
     pass_bypasses_closed: true
-  - name: cluedo
-    title: Cluedo night
-    hosts: [cluedo.example.com]
+  - name: navidrome
+    title: Navidrome
+    hosts: [navidrome.example.com]
     mode: proxy
-    upstream: http://cluedo:3465
-    group: games
-    pass_bypasses_closed: true
+    upstream: http://navidrome:4533
+    group: media
+
+# Scoped API keys for the versioned /api/v1 endpoints (embeddable
+# button, etc.). Generate with `hodor key new --name foo --services
+# jellyfin --actions open,close,status`; only the sha256 hash is stored
+# here, the raw key is shown once at creation time.
+# api_keys:
+#   - id: a1b2c3d4
+#     name: jellyfin-button
+#     hash: <sha256 hex of the generated key>
+#     services: [jellyfin]
+#     actions: [open, close, status]
+#     allow_origins: [https://media.home.example.com]
+#     created_at: 2026-10-25T00:00:00Z

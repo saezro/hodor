@@ -23,7 +23,7 @@ Self-hosted gatekeeper that keeps your homelab closed to the internet — until 
 
 ## Why
 
-Homelabs leak. A GeoGuessr clone, a Cluedo night, a family photo gallery — the moment it's reachable from the internet, it's reachable by everyone, all the time, whether anyone's actually using it or not.
+Homelabs leak. A Jellyfin media server, a Navidrome music library, a family photo gallery — the moment it's reachable from the internet, it's reachable by everyone, all the time, whether anyone's actually using it or not.
 
 hodor sits in front of those services and keeps them **closed by default**. Someone on the LAN or VPN opens a service for a few hours when it's actually needed; it closes itself when the timer runs out. No separate auth system, no account to manage per service, no exposure when nobody's playing.
 
@@ -33,7 +33,7 @@ hodor sits in front of those services and keeps them **closed by default**. Some
 - ⏱️ **Time-boxed access** — open for 1h / 3h / 6h / 24h (configurable presets), auto-closes on its own.
 - 🔁 **Proxy or forwardAuth** — run hodor as the reverse proxy itself, or bolt it onto Traefik, Caddy or nginx as an auth check.
 - 📺 **TV-friendly pairing** — a screen with no keyboard goes to `/tv`, shows a PIN, and gets a long-lived pass once someone approves it from the panel.
-- 🧩 **Groups** — several services behind one switch ("games" opens GeoGuessr *and* Cluedo together).
+- 🧩 **Groups** — several services behind one switch ("media" opens Jellyfin *and* Navidrome together).
 - 🔒 **Admin panel stays on the LAN** — CIDR-restricted, never exposed through the tunnel.
 - 🪶 **Single static binary** — Go, no CGO, practically no dependencies, one `hodor.yaml`.
 
@@ -85,21 +85,21 @@ state_file: /data/state.json
 listen: { public: ":8080", admin: ":8081" }
 admin:
   allow_cidrs: [192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, 127.0.0.0/8]
-  public_url: https://games.home.example.com
+  public_url: https://media.home.example.com
 durations: [1h, 3h, 6h, 24h]
 services:
-  - name: geo
-    title: Homemade GeoGuessr
-    hosts: [geo.example.com]
+  - name: jellyfin
+    title: Jellyfin
+    hosts: [jellyfin.example.com]
     mode: proxy
-    upstream: http://geo:3469
-    group: games
+    upstream: http://jellyfin:8096
+    group: media
     pass_bypasses_closed: true
-  - name: cluedo
-    hosts: [cluedo.example.com]
+  - name: navidrome
+    hosts: [navidrome.example.com]
     mode: proxy
-    upstream: http://cluedo:3465
-    group: games
+    upstream: http://navidrome:4533
+    group: media
 ```
 
 Validate it anytime with `hodor check -c hodor.yaml`.
@@ -113,17 +113,17 @@ Panel edits aren't written back into `hodor.yaml`: they live in a separate `conf
 For a custom button or dashboard that opens/closes a service without visiting the panel, mint a scoped key:
 
 ```
-hodor key new --name geo-button --services geo --actions open,close,status
+hodor key new --name jellyfin-button --services jellyfin --actions open,close,status
 ```
 
 This prints the raw key once and a YAML block to paste under `api_keys` in `hodor.yaml` (only its sha256 hash is stored). Use it against the versioned, LAN-only admin API:
 
 ```
-curl -H "Authorization: Bearer <key>" https://hodor.lan:8081/api/v1/services/geo
-curl -X POST -H "Authorization: Bearer <key>" -d '{"for":"1h"}' https://hodor.lan:8081/api/v1/services/geo/open
+curl -H "Authorization: Bearer <key>" https://hodor.lan:8081/api/v1/services/jellyfin
+curl -X POST -H "Authorization: Bearer <key>" -d '{"for":"1h"}' https://hodor.lan:8081/api/v1/services/jellyfin/open
 ```
 
-Add `allow_origins: [https://games.home.example.com]` to the key for CORS from a browser page embedding the button.
+Add `allow_origins: [https://media.home.example.com]` to the key for CORS from a browser page embedding the button.
 
 ## Embeddable button
 
@@ -131,7 +131,7 @@ Want an open/close button on your homepage dashboard instead of the admin panel?
 
 ```html
 <script src="https://hodor.lan/static/embed.js"
-        data-service="geo" data-key="hdr_..." data-lang="es" defer></script>
+        data-service="jellyfin" data-key="hdr_..." data-lang="es" defer></script>
 ```
 
 No deps, no build step, Shadow DOM, i18n es/en. LAN/VPN only, same as everything else admin-side. Full guide (custom element for multiple buttons, iframe mode, key scoping): [docs/embed.md](docs/embed.md).
@@ -145,17 +145,17 @@ Don't want hodor proxying traffic itself? Point your existing reverse proxy at `
 ```yaml
 labels:
   - traefik.http.middlewares.hodor.forwardauth.address=http://hodor:8080/auth
-  - traefik.http.routers.geo.middlewares=hodor
+  - traefik.http.routers.jellyfin.middlewares=hodor
 ```
 
 **Caddy**
 
 ```caddyfile
-geo.example.com {
+jellyfin.example.com {
     forward_auth hodor:8080 {
         uri /auth
     }
-    reverse_proxy geo:3469
+    reverse_proxy jellyfin:8096
 }
 ```
 
@@ -165,7 +165,7 @@ geo.example.com {
 location / {
     auth_request /hodor-auth;
     error_page 401 = @hodor_closed;
-    proxy_pass http://geo:3469;
+    proxy_pass http://jellyfin:8096;
 }
 location = /hodor-auth {
     internal;

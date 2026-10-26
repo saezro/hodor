@@ -43,7 +43,7 @@
   <g>
     <rect x="734" y="40" width="226" height="72" rx="10" fill="#F3F1EC" stroke="#DBD6CA" stroke-width="1.5"/>
     <text x="847" y="70" text-anchor="middle" font-size="14" font-weight="600" fill="#1C1B19">Your service</text>
-    <text x="847" y="90" text-anchor="middle" font-size="11.5" fill="#6B6557">GeoGuessr, Cluedo, &#8230;</text>
+    <text x="847" y="90" text-anchor="middle" font-size="11.5" fill="#6B6557">Jellyfin, Navidrome, &#8230;</text>
   </g>
 
   <!-- vertical gate indicator -->

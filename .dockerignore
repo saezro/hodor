@@ -8,6 +8,5 @@ examples
 *.exe
 state.json
 *.yaml
-!hodor.example.yaml
 .golangci.yml
 .goreleaser.yaml

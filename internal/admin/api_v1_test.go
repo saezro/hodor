@@ -158,17 +158,17 @@ func TestV1_CORS_AllowDenyPreflight(t *testing.T) {
 	cfg, raw := cfgWithKey(t, config.APIKey{
 		ID: "k1", Name: "n1",
 		Services: []string{"svc1"}, Actions: []string{"status"},
-		AllowOrigins: []string{"https://geo.lan"},
+		AllowOrigins: []string{"https://jellyfin.lan"},
 	})
 	srv, _, _ := newTestServer(t, cfg)
 
 	// Allowed origin: echoed back, with Vary.
-	rec := doReqOrigin(srv, http.MethodGet, "/api/v1/services/svc1", remote, raw, "https://geo.lan")
+	rec := doReqOrigin(srv, http.MethodGet, "/api/v1/services/svc1", remote, raw, "https://jellyfin.lan")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET with allowed origin = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://geo.lan" {
-		t.Errorf("ACAO = %q, want %q", got, "https://geo.lan")
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://jellyfin.lan" {
+		t.Errorf("ACAO = %q, want %q", got, "https://jellyfin.lan")
 	}
 	if got := rec.Header().Get("Vary"); got != "Origin" {
 		t.Errorf("Vary = %q, want %q", got, "Origin")
@@ -189,12 +189,12 @@ func TestV1_CORS_AllowDenyPreflight(t *testing.T) {
 
 	// Preflight for an origin covered by a key that scopes this
 	// service+action: 204 with CORS headers.
-	rec = doReqOrigin(srv, http.MethodOptions, "/api/v1/services/svc1", remote, "", "https://geo.lan")
+	rec = doReqOrigin(srv, http.MethodOptions, "/api/v1/services/svc1", remote, "", "https://jellyfin.lan")
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("OPTIONS allowed origin = %d, want 204: %s", rec.Code, rec.Body.String())
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://geo.lan" {
-		t.Errorf("preflight ACAO = %q, want %q", got, "https://geo.lan")
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://jellyfin.lan" {
+		t.Errorf("preflight ACAO = %q, want %q", got, "https://jellyfin.lan")
 	}
 	if got := rec.Header().Get("Access-Control-Allow-Methods"); got == "" {
 		t.Errorf("preflight missing Access-Control-Allow-Methods")

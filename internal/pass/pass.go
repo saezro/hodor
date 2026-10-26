@@ -21,7 +21,7 @@ import (
 // mis-signed token.
 var ErrInvalid = errors.New("pass: invalid token")
 
-// CookieName returns the per-service cookie name, e.g. hodor_pass_geo.
+// CookieName returns the per-service cookie name, e.g. hodor_pass_jellyfin.
 func CookieName(service string) string {
 	return "hodor_pass_" + service
 }

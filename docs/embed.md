@@ -12,7 +12,7 @@ hodor panel.
 ## 1. Create a scoped key
 
 ```
-hodor key new --name geo-btn --services geo --actions open,close,status
+hodor key new --name jellyfin-btn --services jellyfin --actions open,close,status
 ```
 
 This prints the raw key **once** — copy it now, only its sha256 is stored —
@@ -21,8 +21,8 @@ and a YAML block to paste under `api_keys` in `hodor.yaml`:
 ```yaml
 api_keys:
   - id: 4f9a...
-    name: geo-btn
-    services: [geo]
+    name: jellyfin-btn
+    services: [jellyfin]
     actions: [open, close, status]
     allow_origins: [https://dashboard.home.example.com]
     created_at: 2026-10-25T12:00:00Z
@@ -42,7 +42,7 @@ api_keys:
 
 ```html
 <script src="https://hodor.lan/static/embed.js"
-        data-service="geo"
+        data-service="jellyfin"
         data-key="hdr_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
         data-lang="es"
         defer></script>
@@ -55,8 +55,8 @@ Renders one button right after the script tag.
 ```html
 <script src="https://hodor.lan/static/embed.js" defer></script>
 
-<hodor-button data-service="geo" data-key="hdr_..." data-lang="es"></hodor-button>
-<hodor-button data-service="cluedo" data-key="hdr_..." data-lang="es"></hodor-button>
+<hodor-button data-service="jellyfin" data-key="hdr_..." data-lang="es"></hodor-button>
+<hodor-button data-service="navidrome" data-key="hdr_..." data-lang="es"></hodor-button>
 ```
 
 Each `<hodor-button>`'s own `data-*` wins over the `<script>` tag's, so one
@@ -67,8 +67,8 @@ script load can power several buttons with different keys/services/langs.
 ### iframe (fully isolated, e.g. inside a CMS that strips `<script>`)
 
 ```html
-<iframe src="https://hodor.lan/embed/geo?k=hdr_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-        width="220" height="56" style="border:0" title="GeoGuessr casero"></iframe>
+<iframe src="https://hodor.lan/embed/jellyfin?k=hdr_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        width="220" height="56" style="border:0" title="Jellyfin"></iframe>
 ```
 
 hodor renders a minimal page (`web/templates/embed.html`) that loads the

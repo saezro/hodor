@@ -10,7 +10,7 @@ that 401 to an internal redirect that fetches hodor's closed page.
   TV pairing flow.
 - `hodor.yaml` — matching hodor config (`mode: forwardauth`,
   `auth.on_deny: "401"`).
-- `docker-compose.yml` — nginx, hodor and a sample `geo` service.
+- `docker-compose.yml` — nginx, hodor and a sample `jellyfin` service.
 
 Bring it up:
 

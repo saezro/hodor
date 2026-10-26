@@ -21,8 +21,8 @@ services:
     environment:
       HODOR_CONFIG: /etc/hodor/hodor.yaml
 
-  geo:
-    image: ghcr.io/example/geoguessr-clone:latest
+  jellyfin:
+    image: jellyfin/jellyfin:latest
     restart: unless-stopped
 
 volumes:

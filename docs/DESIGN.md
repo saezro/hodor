@@ -13,7 +13,7 @@ Self-hosted gatekeeper: services published to the internet stay CLOSED by defaul
 
 ## State
 - Per service: `{open bool, until time, opened_by string}`. Open for duration (presets from config, default [1h,3h,6h,24h]) or until closed. Auto-close by timer.
-- Optional `group`: services sharing a group share one switch (e.g. "games").
+- Optional `group`: services sharing a group share one switch (e.g. "media").
 - Persisted to `state_file` (JSON, atomic write tmp+rename) so restart keeps state; if expired on load → closed. Default closed.
 - Event log ring buffer (last 200) shown in panel; optional webhook `on_change` (POST JSON) — e.g. ntfy/Telegram.
 
@@ -31,21 +31,21 @@ state_file: /data/state.json
 listen: { public: ":8080", admin: ":8081" }
 admin:
   allow_cidrs: [192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, 127.0.0.0/8]
-  public_url: https://games.home.example.com
+  public_url: https://media.home.example.com
 durations: [1h, 3h, 6h, 24h]
 services:
-  - name: geo
-    title: GeoGuessr casero
-    hosts: [geo.example.com]
+  - name: jellyfin
+    title: Jellyfin
+    hosts: [jellyfin.example.com]
     mode: proxy
-    upstream: http://geo:3469
-    group: games
+    upstream: http://jellyfin:8096
+    group: media
     pass_bypasses_closed: true
-  - name: cluedo
-    hosts: [cluedo.example.com]
+  - name: navidrome
+    hosts: [navidrome.example.com]
     mode: proxy
-    upstream: http://cluedo:3465
-    group: games
+    upstream: http://navidrome:4533
+    group: media
 ```
 Validation on start with clear errors; `hodor check -c hodor.yaml` subcommand.
 
@@ -68,13 +68,13 @@ Table tests: config validation, state timers (fake clock), HMAC pass sign/verify
 Goal: a custom button inside each service (or a home dashboard) opens/closes it without visiting the hodor panel. Still LAN/VPN only: every endpoint stays on the admin listener behind `admin.allow_cidrs`; nothing new on the public listener.
 
 ### 2a. Scoped API keys
-- `api_keys` (in overlay, see 2c): `{id, name, services: [svc|group…], actions: [open, close, status], allow_origins: [https://geo.lan…], created_at}`. Key = 32 random bytes, shown ONCE on creation; only sha256 stored. Constant-time compare.
+- `api_keys` (in overlay, see 2c): `{id, name, services: [svc|group…], actions: [open, close, status], allow_origins: [https://jellyfin.lan…], created_at}`. Key = 32 random bytes, shown ONCE on creation; only sha256 stored. Constant-time compare.
 - Endpoints (versioned, keep current `/api/*` for the panel): `GET /api/v1/services/{name}` · `POST /api/v1/services/{name}/open {for}` · `POST /api/v1/services/{name}/close`. Auth `Authorization: Bearer <key>`; key must cover service+action, else 403. `admin.token` (global) still works for everything.
 - CORS only for bearer requests: `Access-Control-Allow-Origin` echoed iff Origin ∈ key.allow_origins (no `*`), `OPTIONS` preflight, `Vary: Origin`. Bearer requests skip CSRF (already the rule).
 - Rate limit per key; events log records key name as `opened_by`.
 
 ### 2b. Embeddable button
-- `GET /embed.js` (static, embedded): `<script src="https://hodor.lan/embed.js" data-service="geo" data-key="…" defer></script>` renders a small open/close button + countdown into `<hodor-button>` or after the script tag; shadow DOM, dark theme tokens, i18n via `data-lang`.
+- `GET /embed.js` (static, embedded): `<script src="https://hodor.lan/embed.js" data-service="jellyfin" data-key="…" defer></script>` renders a small open/close button + countdown into `<hodor-button>` or after the script tag; shadow DOM, dark theme tokens, i18n via `data-lang`.
 - `GET /embed/{svc}?k=<key>` iframe alternative; `Content-Security-Policy: frame-ancestors` = key.allow_origins.
 - README snippet + docs/embed.md. Note: key is visible in page source to LAN viewers → scope keys narrowly.
 

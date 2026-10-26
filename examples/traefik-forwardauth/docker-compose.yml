@@ -1,5 +1,5 @@
 # hodor in forwardauth mode behind Traefik: Traefik does the actual
-# reverse-proxying to `geo`, calling out to hodor's /auth endpoint first.
+# reverse-proxying to `jellyfin`, calling out to hodor's /auth endpoint first.
 
 services:
   traefik:
@@ -35,14 +35,14 @@ services:
       - traefik.http.middlewares.hodor-auth.forwardauth.address=http://hodor:8080/auth
       - traefik.http.middlewares.hodor-auth.forwardauth.trustForwardHeader=true
 
-  geo:
-    image: ghcr.io/example/geoguessr-clone:latest
+  jellyfin:
+    image: jellyfin/jellyfin:latest
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.http.routers.geo.rule=Host(`geo.example.com`)
-      - traefik.http.routers.geo.middlewares=hodor-auth
-      - traefik.http.services.geo.loadbalancer.server.port=3469
+      - traefik.http.routers.jellyfin.rule=Host(`jellyfin.example.com`)
+      - traefik.http.routers.jellyfin.middlewares=hodor-auth
+      - traefik.http.services.jellyfin.loadbalancer.server.port=8096
 
 volumes:
   hodor-data:

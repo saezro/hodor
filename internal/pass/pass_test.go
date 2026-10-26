@@ -64,7 +64,7 @@ func TestVerify_Malformed(t *testing.T) {
 }
 
 func TestCookieName(t *testing.T) {
-	if got := CookieName("geo"); got != "hodor_pass_geo" {
+	if got := CookieName("jellyfin"); got != "hodor_pass_jellyfin" {
 		t.Errorf("CookieName() = %q", got)
 	}
 }

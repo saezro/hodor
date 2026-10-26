@@ -289,7 +289,7 @@ func TestValidate_Table(t *testing.T) {
 			name: "api key invalid allow_origin with path",
 			mutate: func(c *Config) {
 				k := validAPIKey()
-				k.AllowOrigins = []string{"https://geo.lan/path"}
+				k.AllowOrigins = []string{"https://jellyfin.lan/path"}
 				c.APIKeys = []APIKey{k}
 			},
 			wantErr: true,
@@ -307,7 +307,7 @@ func TestValidate_Table(t *testing.T) {
 			name: "api key invalid allow_origin scheme",
 			mutate: func(c *Config) {
 				k := validAPIKey()
-				k.AllowOrigins = []string{"ftp://geo.lan"}
+				k.AllowOrigins = []string{"ftp://jellyfin.lan"}
 				c.APIKeys = []APIKey{k}
 			},
 			wantErr: true,
@@ -316,7 +316,7 @@ func TestValidate_Table(t *testing.T) {
 			name: "api key valid allow_origin",
 			mutate: func(c *Config) {
 				k := validAPIKey()
-				k.AllowOrigins = []string{"https://geo.lan"}
+				k.AllowOrigins = []string{"https://jellyfin.lan"}
 				c.APIKeys = []APIKey{k}
 			},
 			wantErr: false,

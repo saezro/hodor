@@ -60,8 +60,8 @@ func TestMatch(t *testing.T) {
 }
 
 func TestAllows(t *testing.T) {
-	svcDirect := config.Service{Name: "geo"}
-	svcGrouped := config.Service{Name: "cluedo", Group: "games"}
+	svcDirect := config.Service{Name: "jellyfin"}
+	svcGrouped := config.Service{Name: "navidrome", Group: "media"}
 
 	tests := []struct {
 		name string
@@ -70,12 +70,12 @@ func TestAllows(t *testing.T) {
 		act  string
 		want bool
 	}{
-		{"direct service name match", config.APIKey{Services: []string{"geo"}, Actions: []string{"status"}}, svcDirect, "status", true},
-		{"group match", config.APIKey{Services: []string{"games"}, Actions: []string{"open"}}, svcGrouped, "open", true},
+		{"direct service name match", config.APIKey{Services: []string{"jellyfin"}, Actions: []string{"status"}}, svcDirect, "status", true},
+		{"group match", config.APIKey{Services: []string{"media"}, Actions: []string{"open"}}, svcGrouped, "open", true},
 		{"wildcard service", config.APIKey{Services: []string{"*"}, Actions: []string{"close"}}, svcDirect, "close", true},
-		{"wrong action", config.APIKey{Services: []string{"geo"}, Actions: []string{"status"}}, svcDirect, "open", false},
+		{"wrong action", config.APIKey{Services: []string{"jellyfin"}, Actions: []string{"status"}}, svcDirect, "open", false},
 		{"service not covered", config.APIKey{Services: []string{"other"}, Actions: []string{"status"}}, svcDirect, "status", false},
-		{"group name does not match direct service without group", config.APIKey{Services: []string{"games"}, Actions: []string{"status"}}, svcDirect, "status", false},
+		{"group name does not match direct service without group", config.APIKey{Services: []string{"media"}, Actions: []string{"status"}}, svcDirect, "status", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -123,8 +123,8 @@ func (s *Store) notify(msg string) {
 }
 
 // appendEventLocked records msg to the event log. msg is a stable
-// "type:service[:extra]" key (e.g. "opened:geo:127.0.0.1", "closed:geo",
-// "expired:geo"), not pre-translated prose: the admin panel (panel.js)
+// "type:service[:extra]" key (e.g. "opened:jellyfin:127.0.0.1", "closed:jellyfin",
+// "expired:jellyfin"), not pre-translated prose: the admin panel (panel.js)
 // parses the type and phrases it in the current UI language. Caller must
 // hold s.mu.
 func (s *Store) appendEventLocked(msg string) {
