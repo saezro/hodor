@@ -34,7 +34,7 @@ func TestValidate_Defaults(t *testing.T) {
 	if c.StateFile != "/data/state.json" {
 		t.Errorf("StateFile default = %q", c.StateFile)
 	}
-	if c.SecretFile != "/run/secrets/hodor" {
+	if c.SecretFile != "/data/secret" {
 		t.Errorf("SecretFile default = %q", c.SecretFile)
 	}
 	if c.Listen.Public != ":8080" {
@@ -70,9 +70,9 @@ func TestValidate_Table(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "no services",
+			name:    "no services is valid (zero-file setup)",
 			mutate:  func(c *Config) { c.Services = nil },
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name:    "service missing name",
@@ -332,6 +332,67 @@ func TestValidate_Table(t *testing.T) {
 				t.Fatalf("Validate() err = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestLoad_MissingFile_Defaults(t *testing.T) {
+	c, err := Load("/nonexistent/path/hodor.yaml")
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil (missing file is not an error)", err)
+	}
+	if len(c.Services) != 0 {
+		t.Errorf("Services = %+v, want empty", c.Services)
+	}
+	if c.Listen.Public != ":8080" || c.Listen.Admin != ":8081" {
+		t.Errorf("Listen defaults not applied: %+v", c.Listen)
+	}
+	if c.StateFile != "/data/state.json" {
+		t.Errorf("StateFile default = %q", c.StateFile)
+	}
+}
+
+func TestDataDir_EnvOverride(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HODOR_DATA_DIR", dir)
+	c := Config{}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if c.StateFile != dir+"/state.json" {
+		t.Errorf("StateFile = %q, want %q", c.StateFile, dir+"/state.json")
+	}
+	if c.SecretFile != dir+"/secret" {
+		t.Errorf("SecretFile = %q, want %q", c.SecretFile, dir+"/secret")
+	}
+}
+
+func TestValidate_AdminAllowCIDRsEnvOverride(t *testing.T) {
+	t.Setenv("HODOR_ADMIN_ALLOW_CIDRS", "203.0.113.0/24, 198.51.100.0/24")
+	c := baseValidConfig()
+	c.Admin.AllowCIDRs = []string{"10.0.0.0/8"} // set in hodor.yaml, must still be overridden
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if len(c.Admin.AllowCIDRs) != 2 || c.Admin.AllowCIDRs[0] != "203.0.113.0/24" || c.Admin.AllowCIDRs[1] != "198.51.100.0/24" {
+		t.Errorf("Admin.AllowCIDRs = %+v, want env override", c.Admin.AllowCIDRs)
+	}
+	if len(c.Admin.ParsedCIDRs) != 2 {
+		t.Errorf("Admin.ParsedCIDRs = %+v, want 2 parsed from env override", c.Admin.ParsedCIDRs)
+	}
+}
+
+func TestLockedGeneralFields_AdminAllowCIDRsEnvLocksEvenWhenBaseUnset(t *testing.T) {
+	t.Setenv("HODOR_ADMIN_ALLOW_CIDRS", "203.0.113.0/24")
+	raw := &Config{} // base hodor.yaml does not set admin.allow_cidrs at all
+	locked := LockedGeneralFields(raw)
+	found := false
+	for _, f := range locked {
+		if f == "admin_allow_cidrs" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("LockedGeneralFields() = %+v, want admin_allow_cidrs locked due to env override", locked)
 	}
 }
 

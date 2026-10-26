@@ -95,8 +95,51 @@ type ConfigGetResponse struct {
 	Services    []config.Service `json:"services"`
 	Durations   []string         `json:"durations"`
 	APIKeys     []config.APIKey  `json:"api_keys"`
+	General     GeneralView      `json:"general"`
 	BasePath    string           `json:"base_path"`
 	OverlayPath string           `json:"overlay_path"`
+}
+
+// GeneralView is the JSON shape of ConfigGetResponse.General and the
+// 200 body of PUT /api/config/general: the effective (merged)
+// value of every general-section field (docs/DESIGN.md "Phase 3"),
+// plus Locked - the subset of field names below that the panel can't
+// write (base config or env override already sets them; PUT on one
+// of them is a 409). AdminToken itself is never serialized, only
+// whether one is set.
+type GeneralView struct {
+	Lang                 string   `json:"lang"`
+	AdminPublicURL       string   `json:"admin_public_url"`
+	AdminAllowCIDRs      []string `json:"admin_allow_cidrs"`
+	AdminTokenSet        bool     `json:"admin_token_set"`
+	AdminTrustedProxies  []string `json:"admin_trusted_proxies"`
+	AdminTrustedHeader   string   `json:"admin_trusted_header"`
+	PublicTrustedProxies []string `json:"public_trusted_proxies"`
+	PublicCookieSecure   bool     `json:"public_cookie_secure"`
+	PassTTL              string   `json:"pass_ttl"`
+	OnChange             string   `json:"on_change"`
+	Locked               []string `json:"locked"`
+}
+
+// ConfigGeneralRequest is the JSON body of PUT /api/config/general: a
+// partial update - every field is optional (field absent/null = leave
+// untouched); AdminToken present as "" clears a previously-set
+// overlay token. Field names and semantics mirror GeneralView (minus
+// Locked, which the client can't set) and config.GeneralPatch (which
+// this converts to 1:1 in config_api.go).
+// AdminTrustedProxies/AdminTrustedHeader are deliberately absent: they
+// are read-only from the panel (see config.General's doc comment),
+// settable only via hodor.yaml or HODOR_ADMIN_TRUSTED_PROXIES/
+// HODOR_ADMIN_TRUSTED_HEADER.
+type ConfigGeneralRequest struct {
+	Lang                 *string   `json:"lang,omitempty"`
+	AdminPublicURL       *string   `json:"admin_public_url,omitempty"`
+	AdminAllowCIDRs      *[]string `json:"admin_allow_cidrs,omitempty"`
+	AdminToken           *string   `json:"admin_token,omitempty"`
+	PublicTrustedProxies *[]string `json:"public_trusted_proxies,omitempty"`
+	PublicCookieSecure   *bool     `json:"public_cookie_secure,omitempty"`
+	PassTTL              *string   `json:"pass_ttl,omitempty"`
+	OnChange             *string   `json:"on_change,omitempty"`
 }
 
 // ConfigDurationsRequest is the JSON body of PUT /api/config/durations.

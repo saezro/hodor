@@ -3,10 +3,13 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -153,18 +156,68 @@ var serviceNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 var defaultDurations = []string{"1h", "3h", "6h", "24h"}
 
 var defaultCIDRs = []string{
-	"192.168.0.0/16",
-	"10.0.0.0/8",
-	"172.16.0.0/12",
-	"100.64.0.0/10",
 	"127.0.0.0/8",
 	"::1/128",
+	"10.0.0.0/8",
+	"172.16.0.0/12",
+	"192.168.0.0/16",
+	"100.64.0.0/10",
+	"fc00::/7",
 }
 
-// Load reads and parses the YAML file at path, then validates it.
+// dataDir resolves the zero-file-setup data directory (docs/DESIGN.md
+// "Phase 3 — zero-file setup"): env HODOR_DATA_DIR, or "/data" to match
+// the Dockerfile's VOLUME. Used to default state_file/secret_file/the
+// config_overlay (via StateFile's directory) when hodor.yaml doesn't
+// set them - or doesn't exist at all.
+func dataDir() string {
+	if v := os.Getenv("HODOR_DATA_DIR"); v != "" {
+		return v
+	}
+	return "/data"
+}
+
+// LoadRaw reads and parses path's YAML *without* applying defaults or
+// validation. It exists for callers that need to know whether a field
+// was actually set in the base file, as opposed to defaulted - e.g.
+// the admin "general" settings' read-only check (see
+// LockedGeneralFields) - since Validate's defaults would otherwise
+// make every field look "set". A missing file is not an error: it
+// returns an empty Config, same as Load (see Load's zero-file-setup
+// doc comment).
+func LoadRaw(path string) (*Config, error) {
+	data, err := os.ReadFile(path) // #nosec G304 -- path comes from this process's own config, not request input
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &Config{}, nil
+		}
+		return nil, fmt.Errorf("read config %s: %w", path, err)
+	}
+	var c Config
+	if err := yaml.Unmarshal(data, &c); err != nil {
+		return nil, fmt.Errorf("parse config %s: %w", path, err)
+	}
+	return &c, nil
+}
+
+// Load reads and parses the YAML file at path, then validates it. A
+// missing file is not an error (docs/DESIGN.md "Phase 3 — zero-file
+// setup"): hodor starts fine with no hodor.yaml at all, using only
+// defaults/env/the panel from then on; this is logged at info level so
+// it's clear on startup whether a base config was actually found. A
+// file that exists but fails to parse is still a hard error, same as
+// before.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path) // #nosec G304 -- path comes from this process's own config, not request input
 	if err != nil {
+		if os.IsNotExist(err) {
+			slog.Info("config file not found, starting with defaults only", "path", path)
+			c := &Config{}
+			if err := c.Validate(); err != nil {
+				return nil, err
+			}
+			return c, nil
+		}
 		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
 	var c Config
@@ -180,11 +233,14 @@ func Load(path string) (*Config, error) {
 // Validate applies defaults and checks the configuration for errors,
 // returning a descriptive error on the first problem found.
 func (c *Config) Validate() error {
+	if c.Lang == "" {
+		c.Lang = "es"
+	}
 	if c.StateFile == "" {
-		c.StateFile = "/data/state.json"
+		c.StateFile = filepath.Join(dataDir(), "state.json")
 	}
 	if c.SecretFile == "" {
-		c.SecretFile = "/run/secrets/hodor"
+		c.SecretFile = filepath.Join(dataDir(), "secret")
 	}
 	if c.Listen.Public == "" {
 		c.Listen.Public = ":8080"
@@ -200,6 +256,37 @@ func (c *Config) Validate() error {
 	}
 	if c.PassTTL == "" {
 		c.PassTTL = "720h" // 30 days
+	}
+
+	// Startup-only env overrides (docs/DESIGN.md "Phase 3"): not
+	// hot-reloadable (read once, here, every time a Config is built,
+	// including on reload/panel-save - but the env itself never
+	// changes at runtime so that's a no-op in practice), and always win
+	// over both hodor.yaml and the panel overlay. HODOR_ADMIN_ALLOW_CIDRS
+	// in particular is the anti-lockout valve: it always works even if
+	// the panel's own allow_cidrs is broken.
+	if v := os.Getenv("HODOR_LISTEN_PUBLIC"); v != "" {
+		c.Listen.Public = v
+	}
+	if v := os.Getenv("HODOR_LISTEN_ADMIN"); v != "" {
+		c.Listen.Admin = v
+	}
+	if v, ok := os.LookupEnv("HODOR_ADMIN_ALLOW_CIDRS"); ok {
+		cidrs := splitTrimmedComma(v)
+		if len(cidrs) == 0 {
+			return fmt.Errorf("admin.allow_cidrs: HODOR_ADMIN_ALLOW_CIDRS is set but empty")
+		}
+		c.Admin.AllowCIDRs = cidrs
+	}
+	if v, ok := os.LookupEnv("HODOR_ADMIN_TRUSTED_PROXIES"); ok {
+		proxies := splitTrimmedComma(v)
+		if len(proxies) == 0 {
+			return fmt.Errorf("admin.trusted_proxies: HODOR_ADMIN_TRUSTED_PROXIES is set but empty")
+		}
+		c.Admin.TrustedProxies = proxies
+	}
+	if v := strings.TrimSpace(os.Getenv("HODOR_ADMIN_TRUSTED_HEADER")); v != "" {
+		c.Admin.TrustedHeader = v
 	}
 
 	for _, s := range c.Admin.AllowCIDRs {
@@ -241,10 +328,6 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("pass_ttl: invalid duration %q: %w", c.PassTTL, err)
 	}
 	c.ParsedPassTTL = ttl
-
-	if len(c.Services) == 0 {
-		return fmt.Errorf("services: at least one service is required")
-	}
 
 	names := map[string]bool{}
 	hosts := map[string]string{}
@@ -381,6 +464,21 @@ func (c *Config) validateAPIKeys(names, groups map[string]bool) error {
 		}
 	}
 	return nil
+}
+
+// splitTrimmedComma splits s on commas, trimming whitespace and
+// dropping empty elements - used for env-provided lists like
+// HODOR_ADMIN_ALLOW_CIDRS.
+func splitTrimmedComma(s string) []string {
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func isHexString(s string) bool {

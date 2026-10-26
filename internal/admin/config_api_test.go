@@ -239,6 +239,154 @@ func TestConfigAPI_Reload_OK(t *testing.T) {
 	}
 }
 
+func TestConfigAPI_GeneralPut_OKAndNotExposed(t *testing.T) {
+	srv, overlayPath := newLiveTestServer(t, "")
+	const remote = "127.0.0.1:1234"
+	token := csrfToken(t, srv, remote)
+	headers := map[string]string{"X-CSRF-Token": token}
+
+	rec := doReqBody(srv, http.MethodPut, "/api/config/general", remote, headers, `{"admin_token":"newtok","pass_ttl":"48h"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT /api/config/general = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	var view GeneralView
+	if err := json.Unmarshal(rec.Body.Bytes(), &view); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !view.AdminTokenSet {
+		t.Errorf("GeneralView.AdminTokenSet = false, want true after setting admin_token")
+	}
+	if view.PassTTL != "48h" {
+		t.Errorf("GeneralView.PassTTL = %q, want %q", view.PassTTL, "48h")
+	}
+	if strings.Contains(rec.Body.String(), "newtok") {
+		t.Errorf("PUT /api/config/general response leaks the raw token: %s", rec.Body.String())
+	}
+
+	onDisk, err := os.ReadFile(overlayPath)
+	if err != nil {
+		t.Fatalf("read overlay: %v", err)
+	}
+	if !strings.Contains(string(onDisk), "newtok") {
+		t.Errorf("overlay on disk does not contain the saved admin_token:\n%s", onDisk)
+	}
+
+	// GET /api/config must not expose it either.
+	rec = doReq(srv, http.MethodGet, "/api/config", remote, nil)
+	if strings.Contains(rec.Body.String(), "newtok") {
+		t.Errorf("GET /api/config response leaks the raw token: %s", rec.Body.String())
+	}
+}
+
+func TestConfigAPI_GeneralPut_BaseFieldLocked409(t *testing.T) {
+	srv, _ := newLiveTestServer(t, "pass_ttl: 12h\n")
+	const remote = "127.0.0.1:1234"
+	token := csrfToken(t, srv, remote)
+	headers := map[string]string{"X-CSRF-Token": token}
+
+	rec := doReqBody(srv, http.MethodPut, "/api/config/general", remote, headers, `{"pass_ttl":"24h"}`)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("PUT /api/config/general on base-locked field = %d, want 409: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doReq(srv, http.MethodGet, "/api/config", remote, nil)
+	var resp ConfigGetResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	found := false
+	for _, f := range resp.General.Locked {
+		if f == "pass_ttl" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("GeneralView.Locked = %+v, want pass_ttl locked", resp.General.Locked)
+	}
+}
+
+func TestConfigAPI_GeneralPut_Lockout400(t *testing.T) {
+	srv, _ := newLiveTestServer(t, "")
+	const remote = "127.0.0.1:1234"
+	token := csrfToken(t, srv, remote)
+	headers := map[string]string{"X-CSRF-Token": token}
+
+	// Setting allow_cidrs to a range that excludes the caller's own IP
+	// (127.0.0.1) must be rejected before anything is written.
+	rec := doReqBody(srv, http.MethodPut, "/api/config/general", remote, headers, `{"admin_allow_cidrs":["10.0.0.0/8"]}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PUT /api/config/general locking caller out = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doReq(srv, http.MethodGet, "/api/config", remote, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/config after rejected lockout = %d, want 200 (caller still allowed): %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestConfigAPI_GeneralPut_UnknownField_RejectedAndNotWritten: the
+// request body naming a non-panel-editable field (admin_trusted_proxies
+// - see General's doc comment in internal/config/overlay.go) must be
+// rejected by DisallowUnknownFields with 400, and nothing written to
+// the overlay.
+func TestConfigAPI_GeneralPut_UnknownField_RejectedAndNotWritten(t *testing.T) {
+	srv, overlayPath := newLiveTestServer(t, "")
+	const remote = "127.0.0.1:1234"
+	token := csrfToken(t, srv, remote)
+	headers := map[string]string{"X-CSRF-Token": token}
+
+	rec := doReqBody(srv, http.MethodPut, "/api/config/general", remote, headers, `{"admin_trusted_proxies":["0.0.0.0/0"]}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PUT /api/config/general with admin_trusted_proxies = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+
+	if _, err := os.Stat(overlayPath); err == nil {
+		onDisk, readErr := os.ReadFile(overlayPath)
+		if readErr != nil {
+			t.Fatalf("read overlay: %v", readErr)
+		}
+		if strings.Contains(string(onDisk), "trusted_proxies") {
+			t.Errorf("overlay was written despite rejected request:\n%s", onDisk)
+		}
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat overlay: %v", err)
+	}
+}
+
+func TestConfigAPI_GeneralPut_HotSwap_AllowCIDRsTakeEffectImmediately(t *testing.T) {
+	srv, _ := newLiveTestServer(t, "")
+	const remote = "127.0.0.1:1234"
+	const otherRemote = "203.0.113.5:1234"
+	token := csrfToken(t, srv, remote)
+	headers := map[string]string{"X-CSRF-Token": token}
+
+	// otherRemote starts out allowed (default CIDRs include public space? no -
+	// defaults are private ranges only, so confirm it's denied beforehand).
+	rec := doReq(srv, http.MethodGet, "/healthz", otherRemote, nil)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("GET /healthz from %s before change = %d, want 403", otherRemote, rec.Code)
+	}
+
+	// Widen allow_cidrs to include otherRemote, keeping the current caller in too.
+	rec = doReqBody(srv, http.MethodPut, "/api/config/general", remote, headers, `{"admin_allow_cidrs":["127.0.0.1/32","203.0.113.0/24"]}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT /api/config/general = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	// No restart: otherRemote must now be let in by the very next request.
+	rec = doReq(srv, http.MethodGet, "/healthz", otherRemote, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /healthz from %s after hot-swap = %d, want 200: %s", otherRemote, rec.Code, rec.Body.String())
+	}
+
+	// And the old caller's IP is no longer implicitly trusted by the
+	// defaults alone - it's only in because we explicitly kept it.
+	rec = doReq(srv, http.MethodGet, "/healthz", remote, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /healthz from %s after hot-swap = %d, want 200 (still in the new list): %s", remote, rec.Code, rec.Body.String())
+	}
+}
+
 func TestConfigAPI_DurationsPut_Invalid(t *testing.T) {
 	srv, _ := newLiveTestServer(t, "")
 	const remote = "127.0.0.1:1234"

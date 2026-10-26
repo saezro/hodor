@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"sync/atomic"
 )
@@ -148,6 +149,10 @@ func (l *Live) mutateOverlay(fn func(base *Config, ov *Overlay) error) (*Config,
 	if err != nil {
 		return nil, err
 	}
+	raw, err := LoadRaw(l.basePath)
+	if err != nil {
+		return nil, err
+	}
 	ov, err := LoadOverlay(l.overlayPath)
 	if err != nil {
 		return nil, err
@@ -156,7 +161,7 @@ func (l *Live) mutateOverlay(fn func(base *Config, ov *Overlay) error) (*Config,
 		return nil, err
 	}
 
-	merged := MergeOverlay(base, ov)
+	merged := MergeOverlay(base, raw, ov)
 	if err := merged.Validate(); err != nil {
 		return nil, err
 	}
@@ -250,6 +255,70 @@ func (l *Live) DeleteAPIKey(id string) (*Config, error) {
 		}
 		return ErrNotFound
 	})
+}
+
+// BaseRaw reads the base hodor.yaml with no defaults/validation
+// applied (see LoadRaw), for callers that need to know which general
+// fields it actually sets (LockedGeneralFields) as opposed to merely
+// defaulted.
+func (l *Live) BaseRaw() (*Config, error) {
+	return LoadRaw(l.basePath)
+}
+
+// PutGeneral applies patch to the overlay's general section (see
+// overlay.go's General/GeneralPatch, docs/DESIGN.md "Phase 3"): nil
+// fields in patch are left untouched. Rejects with *GeneralLockedError
+// if patch touches a field the base config (or an env override) sets
+// - those are read-only from the panel - and with ErrLockout if the
+// resulting admin.allow_cidrs would exclude clientIP (the caller's own
+// IP; pass nil to skip this check, e.g. for non-HTTP callers). Like
+// every other Live mutator, nothing is written on any error.
+func (l *Live) PutGeneral(patch GeneralPatch, clientIP net.IP) (*Config, error) {
+	l.saveMu.Lock()
+	defer l.saveMu.Unlock()
+
+	raw, err := LoadRaw(l.basePath)
+	if err != nil {
+		return nil, err
+	}
+	lockedSet := make(map[string]bool)
+	for _, f := range LockedGeneralFields(raw) {
+		lockedSet[f] = true
+	}
+	for _, f := range patch.fieldsTouched() {
+		if lockedSet[f] {
+			return nil, &GeneralLockedError{Field: f}
+		}
+	}
+
+	base, err := Load(l.basePath)
+	if err != nil {
+		return nil, err
+	}
+	ov, err := LoadOverlay(l.overlayPath)
+	if err != nil {
+		return nil, err
+	}
+	patch.apply(&ov.General)
+
+	merged := MergeOverlay(base, raw, ov)
+	if err := merged.Validate(); err != nil {
+		return nil, err
+	}
+
+	if clientIP != nil && !ipInCIDRs(merged.Admin.ParsedCIDRs, clientIP) {
+		return nil, ErrLockout
+	}
+
+	cur := l.Get()
+	keepNonHotReloadable(cur, merged)
+
+	if err := SaveOverlay(l.overlayPath, ov); err != nil {
+		return nil, err
+	}
+	l.ptr.Store(merged)
+	l.fireSwap(cur, merged)
+	return merged, nil
 }
 
 // NewLiveFrom wraps an already-built, already-validated Config as a

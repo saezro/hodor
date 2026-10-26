@@ -2,12 +2,14 @@ package admin
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/saezro/hodor/internal/apikey"
+	"github.com/saezro/hodor/internal/auth"
 	"github.com/saezro/hodor/internal/config"
 )
 
@@ -21,9 +23,83 @@ func (s *Server) handleConfigGet(w http.ResponseWriter, _ *http.Request) {
 		Services:    cfg.Services,
 		Durations:   cfg.Durations,
 		APIKeys:     cfg.APIKeys,
+		General:     s.generalView(cfg),
 		BasePath:    s.live.BasePath(),
 		OverlayPath: s.live.OverlayPath(),
 	})
+}
+
+// generalView builds the GeneralView for cfg (the merged config to
+// report effective values from): Locked is computed from the raw,
+// unvalidated base config (see config.LockedGeneralFields) so that
+// defaults filled in by Validate don't make every field look "set".
+func (s *Server) generalView(cfg *config.Config) GeneralView {
+	var locked []string
+	if raw, err := s.live.BaseRaw(); err == nil {
+		locked = config.LockedGeneralFields(raw)
+	} else {
+		s.log.Error("general: could not read raw base config for locked-field check", "err", err)
+	}
+	cookieSecure := false
+	if cfg.Public.CookieSecure != nil {
+		cookieSecure = *cfg.Public.CookieSecure
+	}
+	return GeneralView{
+		Lang:                 cfg.Lang,
+		AdminPublicURL:       cfg.Admin.PublicURL,
+		AdminAllowCIDRs:      cfg.Admin.AllowCIDRs,
+		AdminTokenSet:        cfg.Admin.Token != "",
+		AdminTrustedProxies:  cfg.Admin.TrustedProxies,
+		AdminTrustedHeader:   cfg.Admin.TrustedHeader,
+		PublicTrustedProxies: cfg.Public.TrustedProxies,
+		PublicCookieSecure:   cookieSecure,
+		PassTTL:              cfg.PassTTL,
+		OnChange:             cfg.OnChange,
+		Locked:               locked,
+	}
+}
+
+// handleConfigGeneralPut answers PUT /api/config/general: a partial
+// update to the overlay's general section (docs/DESIGN.md "Phase 3").
+// A field touching one locked by the base config/an env override ->
+// 409 (same rule as a base service/key); a resulting admin.allow_cidrs
+// that would exclude the caller's own IP -> 400 "would lock you out"
+// (checked against the real client IP, resolved the same way
+// cidrCheck does).
+func (s *Server) handleConfigGeneralPut(w http.ResponseWriter, r *http.Request) {
+	var req ConfigGeneralRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields() // admin_trusted_proxies/admin_trusted_header are not panel-editable - reject rather than silently ignore
+	if err := dec.Decode(&req); err != nil {
+		writeValidationError(w, "body", "invalid json: "+err.Error())
+		return
+	}
+	patch := config.GeneralPatch{
+		Lang:                 req.Lang,
+		AdminPublicURL:       req.AdminPublicURL,
+		AdminAllowCIDRs:      req.AdminAllowCIDRs,
+		AdminToken:           req.AdminToken,
+		PublicTrustedProxies: req.PublicTrustedProxies,
+		PublicCookieSecure:   req.PublicCookieSecure,
+		PassTTL:              req.PassTTL,
+		OnChange:             req.OnChange,
+	}
+	clientIP := auth.ClientIP(r, s.cfg().Admin.ParsedProxies, s.cfg().Admin.TrustedHeader)
+
+	cfg, err := s.live.PutGeneral(patch, clientIP)
+	if err != nil {
+		var lockedErr *config.GeneralLockedError
+		switch {
+		case errors.As(err, &lockedErr):
+			writeJSON(w, http.StatusConflict, errorResponse{Error: lockedErr.Error()})
+		case errors.Is(err, config.ErrLockout):
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "would lock you out"})
+		default:
+			writeConfigError(w, err)
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, s.generalView(cfg))
 }
 
 // serviceSource returns the merged Source ("base"/"overlay") of the

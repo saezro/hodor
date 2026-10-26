@@ -91,6 +91,7 @@ func New(live *config.Live, st *state.Store, pins *pin.Manager, secret []byte, l
 	mux.HandleFunc("GET /api/events", s.handleEventsList)
 
 	mux.HandleFunc("GET /api/config", s.handleConfigGet)
+	mux.HandleFunc("PUT /api/config/general", s.handleConfigGeneralPut)
 	mux.HandleFunc("PUT /api/config/services/{name}", s.handleConfigServicePut)
 	mux.HandleFunc("DELETE /api/config/services/{name}", s.handleConfigServiceDelete)
 	mux.HandleFunc("PUT /api/config/durations", s.handleConfigDurationsPut)

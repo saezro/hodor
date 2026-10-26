@@ -1,9 +1,12 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // baseWithTwoServices returns an already-validated base Config with
@@ -45,7 +48,7 @@ func TestMergeOverlay_ServiceOverrideAddAndSource(t *testing.T) {
 		},
 	}
 
-	merged := MergeOverlay(base, ov)
+	merged := MergeOverlay(base, base, ov)
 	if err := merged.Validate(); err != nil {
 		t.Fatalf("Validate merged: %v", err)
 	}
@@ -81,12 +84,12 @@ func TestMergeOverlay_ServiceOverrideAddAndSource(t *testing.T) {
 func TestMergeOverlay_DurationsFallbackAndOverride(t *testing.T) {
 	base := baseWithTwoServices(t)
 
-	merged := MergeOverlay(base, &Overlay{})
+	merged := MergeOverlay(base, base, &Overlay{})
 	if len(merged.Durations) != 2 || merged.Durations[0] != "1h" {
 		t.Errorf("empty overlay durations = %v, want base's [1h 3h]", merged.Durations)
 	}
 
-	merged = MergeOverlay(base, &Overlay{Durations: []string{"30m"}})
+	merged = MergeOverlay(base, base, &Overlay{Durations: []string{"30m"}})
 	if len(merged.Durations) != 1 || merged.Durations[0] != "30m" {
 		t.Errorf("overlay durations = %v, want [30m]", merged.Durations)
 	}
@@ -103,7 +106,7 @@ func TestMergeOverlay_APIKeysMergeByID(t *testing.T) {
 		},
 	}
 
-	merged := MergeOverlay(base, ov)
+	merged := MergeOverlay(base, base, ov)
 	if err := merged.Validate(); err != nil {
 		t.Fatalf("Validate merged: %v", err)
 	}
@@ -136,9 +139,163 @@ func TestMergeOverlay_DuplicateIDWithinOverlay_CaughtByValidate(t *testing.T) {
 		},
 	}
 
-	merged := MergeOverlay(base, ov)
+	merged := MergeOverlay(base, base, ov)
 	if err := merged.Validate(); err == nil {
 		t.Fatalf("Validate merged with duplicate overlay api key id: want error, got nil")
+	}
+}
+
+// writeBaseAndOverlay writes a minimal base hodor.yaml (one service,
+// "svc1") plus baseExtraYAML, and an overlay with overlayYAML, under a
+// fresh t.TempDir(). Returns the base path.
+func writeBaseAndOverlay(t *testing.T, baseExtraYAML, overlayYAML string) string {
+	t.Helper()
+	dir := t.TempDir()
+	basePath := filepath.Join(dir, "hodor.yaml")
+	overlayPath := filepath.Join(dir, "managed.yaml")
+
+	baseYAML := "state_file: " + filepath.Join(dir, "state.json") + "\n" +
+		"config_overlay: " + overlayPath + "\n" +
+		"services:\n" +
+		"  - name: svc1\n" +
+		"    hosts: [svc1.example.com]\n" +
+		"    upstream: http://127.0.0.1:9001\n" +
+		baseExtraYAML
+	if err := os.WriteFile(basePath, []byte(baseYAML), 0o600); err != nil {
+		t.Fatalf("write base: %v", err)
+	}
+	if overlayYAML != "" {
+		if err := os.WriteFile(overlayPath, []byte(overlayYAML), 0o600); err != nil {
+			t.Fatalf("write overlay: %v", err)
+		}
+	}
+	return basePath
+}
+
+// TestMergeGeneral_PassTTL_OverlayWinsOverDefault: base doesn't set
+// pass_ttl, overlay does -> merged picks up the overlay's value instead
+// of Validate's 720h default.
+func TestMergeGeneral_PassTTL_OverlayWinsOverDefault(t *testing.T) {
+	basePath := writeBaseAndOverlay(t, "", "general:\n  pass_ttl: 48h\n")
+
+	merged, _, _, err := LoadWithOverlay(basePath)
+	if err != nil {
+		t.Fatalf("LoadWithOverlay: %v", err)
+	}
+	if merged.PassTTL != "48h" {
+		t.Errorf("merged.PassTTL = %q, want %q (overlay)", merged.PassTTL, "48h")
+	}
+	if merged.ParsedPassTTL != 48*time.Hour {
+		t.Errorf("merged.ParsedPassTTL = %v, want 48h", merged.ParsedPassTTL)
+	}
+}
+
+// TestMergeGeneral_PassTTL_BaseWinsOverOverlayAndLocksPanel: base sets
+// pass_ttl, overlay also sets a different value -> base wins (overlay
+// is ignored), and Live.PutGeneral rejects a panel write to pass_ttl
+// with *GeneralLockedError since base makes it read-only.
+func TestMergeGeneral_PassTTL_BaseWinsOverOverlayAndLocksPanel(t *testing.T) {
+	basePath := writeBaseAndOverlay(t, "pass_ttl: 24h\n", "general:\n  pass_ttl: 48h\n")
+
+	merged, _, _, err := LoadWithOverlay(basePath)
+	if err != nil {
+		t.Fatalf("LoadWithOverlay: %v", err)
+	}
+	if merged.PassTTL != "24h" {
+		t.Errorf("merged.PassTTL = %q, want %q (base wins over overlay)", merged.PassTTL, "24h")
+	}
+
+	live, err := NewLive(basePath)
+	if err != nil {
+		t.Fatalf("NewLive: %v", err)
+	}
+	ttl := "1h"
+	_, err = live.PutGeneral(GeneralPatch{PassTTL: &ttl}, nil)
+	var lockedErr *GeneralLockedError
+	if !errors.As(err, &lockedErr) {
+		t.Fatalf("PutGeneral(pass_ttl) err = %v, want *GeneralLockedError", err)
+	}
+	if lockedErr.Field != "pass_ttl" {
+		t.Errorf("GeneralLockedError.Field = %q, want %q", lockedErr.Field, "pass_ttl")
+	}
+}
+
+// TestMergeGeneral_PassTTL_DefaultsWhenNeitherSet: neither base nor
+// overlay set pass_ttl -> Validate's current default (720h) applies.
+func TestMergeGeneral_PassTTL_DefaultsWhenNeitherSet(t *testing.T) {
+	basePath := writeBaseAndOverlay(t, "", "")
+
+	merged, _, _, err := LoadWithOverlay(basePath)
+	if err != nil {
+		t.Fatalf("LoadWithOverlay: %v", err)
+	}
+	if merged.PassTTL != "720h" {
+		t.Errorf("merged.PassTTL = %q, want default %q", merged.PassTTL, "720h")
+	}
+	if merged.ParsedPassTTL != 720*time.Hour {
+		t.Errorf("merged.ParsedPassTTL = %v, want 720h", merged.ParsedPassTTL)
+	}
+}
+
+// TestValidate_AdminAllowCIDRsEnv_EmptyOrBlank_Errors covers both
+// HODOR_ADMIN_ALLOW_CIDRS="" and a value that's blank once trimmed
+// (e.g. " , "): both must fail validation rather than silently
+// clearing admin.allow_cidrs.
+func TestValidate_AdminAllowCIDRsEnv_EmptyOrBlank_Errors(t *testing.T) {
+	for _, v := range []string{"", " , "} {
+		t.Run(fmt.Sprintf("%q", v), func(t *testing.T) {
+			t.Setenv("HODOR_ADMIN_ALLOW_CIDRS", v)
+			c := baseValidConfig()
+			if err := c.Validate(); err == nil {
+				t.Fatalf("Validate() with HODOR_ADMIN_ALLOW_CIDRS=%q: want error, got nil", v)
+			}
+		})
+	}
+}
+
+// TestValidate_AdminTrustedProxiesAndHeaderEnv_WinOverYAML: the
+// HODOR_ADMIN_TRUSTED_PROXIES/HODOR_ADMIN_TRUSTED_HEADER env vars
+// override whatever hodor.yaml sets for admin.trusted_proxies/
+// admin.trusted_header (these fields are never panel-editable - see
+// General's doc comment in overlay.go - so env vs. yaml is the only
+// precedence that applies).
+func TestValidate_AdminTrustedProxiesAndHeaderEnv_WinOverYAML(t *testing.T) {
+	t.Setenv("HODOR_ADMIN_TRUSTED_PROXIES", "10.0.0.0/8")
+	t.Setenv("HODOR_ADMIN_TRUSTED_HEADER", "X-Real-IP")
+
+	c := baseValidConfig()
+	c.Admin.TrustedProxies = []string{"192.168.0.0/16"}
+	c.Admin.TrustedHeader = "X-Forwarded-For"
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if len(c.Admin.TrustedProxies) != 1 || c.Admin.TrustedProxies[0] != "10.0.0.0/8" {
+		t.Errorf("Admin.TrustedProxies = %+v, want env override [10.0.0.0/8]", c.Admin.TrustedProxies)
+	}
+	if c.Admin.TrustedHeader != "X-Real-IP" {
+		t.Errorf("Admin.TrustedHeader = %q, want env override %q", c.Admin.TrustedHeader, "X-Real-IP")
+	}
+	if len(c.Admin.ParsedProxies) != 1 {
+		t.Errorf("Admin.ParsedProxies = %+v, want 1 parsed from env override", c.Admin.ParsedProxies)
+	}
+}
+
+// TestLockedGeneralFields_AdminAllowCIDRsSet_LocksField checks that
+// admin_allow_cidrs set via HODOR_ADMIN_ALLOW_CIDRS shows up in
+// LockedGeneralFields (the list PUT /api/config/general's 409 and the
+// panel's "Locked" view are both driven from).
+func TestLockedGeneralFields_AdminAllowCIDRsSet_LocksField(t *testing.T) {
+	t.Setenv("HODOR_ADMIN_ALLOW_CIDRS", "203.0.113.0/24")
+	raw := &Config{}
+	locked := LockedGeneralFields(raw)
+	found := false
+	for _, f := range locked {
+		if f == "admin_allow_cidrs" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("LockedGeneralFields() = %+v, want admin_allow_cidrs", locked)
 	}
 }
 
