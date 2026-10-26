@@ -89,7 +89,7 @@ func New(live *config.Live, st *state.Store, pins *pin.Manager, secret []byte, l
 	}
 	setupTokenFile := setupTokenPath(cfg)
 	if cfg.Admin.Token == "" {
-		log.Warn("no admin token set: panel locked until you log in with this setup token", "setup_token", setupToken)
+		log.Warn("no admin token set: panel locked until you log in with the setup token (printed on stderr and in setup.token)", "path", setupTokenFile)
 		fmt.Fprintln(os.Stderr, "hodor setup token:", setupToken)
 		fmt.Fprintln(os.Stderr, "hodor setup token: use it as the admin Bearer token to log in, then set admin_token to replace it")
 		if err := writeSetupTokenFile(setupTokenFile, setupToken); err != nil {
