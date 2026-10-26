@@ -7,8 +7,11 @@ package admin
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/saezro/hodor/internal/auth"
@@ -42,8 +45,15 @@ type Server struct {
 	lang      i18n.Lang
 	log       *slog.Logger
 	csrfToken string
-	pinLimit  *auth.RateLimiter
-	keyLimit  *auth.RateLimiter
+	// setupToken is a random, in-memory-only bearer token used instead
+	// of admin.token while none is configured (docs/DESIGN.md "Phase
+	// 3 — zero-file setup"): without it, every /api/* request would be
+	// unauthenticated. Never persisted/serialized and never equal to
+	// admin.token; see checkBearer/effectiveToken. It changes on every
+	// restart until an admin.token is set via PUT /api/config/general.
+	setupToken string
+	pinLimit   *auth.RateLimiter
+	keyLimit   *auth.RateLimiter
 
 	handler http.Handler
 }
@@ -60,17 +70,35 @@ func New(live *config.Live, st *state.Store, pins *pin.Manager, secret []byte, l
 	if err != nil {
 		return nil, err
 	}
+	setupToken, err := randomHex(32)
+	if err != nil {
+		return nil, err
+	}
 	cfg := live.Get()
 	s := &Server{
-		live:      live,
-		state:     st,
-		pins:      pins,
-		secret:    secret,
-		lang:      i18n.Parse(cfg.Lang),
-		log:       log,
-		csrfToken: token,
-		pinLimit:  auth.NewRateLimiter(pinApproveLimit, pinApproveWindow),
-		keyLimit:  auth.NewRateLimiter(apiV1KeyLimit, apiV1KeyWindow),
+		live:       live,
+		state:      st,
+		pins:       pins,
+		secret:     secret,
+		lang:       i18n.Parse(cfg.Lang),
+		log:        log,
+		csrfToken:  token,
+		setupToken: setupToken,
+		pinLimit:   auth.NewRateLimiter(pinApproveLimit, pinApproveWindow),
+		keyLimit:   auth.NewRateLimiter(apiV1KeyLimit, apiV1KeyWindow),
+	}
+	setupTokenFile := setupTokenPath(cfg)
+	if cfg.Admin.Token == "" {
+		log.Warn("no admin token set: panel locked until you log in with this setup token", "setup_token", setupToken)
+		fmt.Fprintln(os.Stderr, "hodor setup token:", setupToken)
+		fmt.Fprintln(os.Stderr, "hodor setup token: use it as the admin Bearer token to log in, then set admin_token to replace it")
+		if err := writeSetupTokenFile(setupTokenFile, setupToken); err != nil {
+			log.Warn("failed to write setup token file (CLI commands will need admin.token or ADMIN_TOKEN)", "path", setupTokenFile, "err", err)
+		}
+	} else {
+		// A stale file from a previous no-admin.token run would let the
+		// CLI pick up a bearer that's no longer valid; best effort only.
+		_ = os.Remove(setupTokenFile)
 	}
 
 	mux := http.NewServeMux()
@@ -113,6 +141,17 @@ func New(live *config.Live, st *state.Store, pins *pin.Manager, secret []byte, l
 // cached in a field) so a reload/save is visible immediately.
 func (s *Server) cfg() *config.Config { return s.live.Get() }
 
+// effectiveToken returns the bearer token currently accepted by
+// checkBearer: admin.token once one is configured, s.setupToken while
+// it isn't. Setting admin.token via PUT /api/config/general makes this
+// switch over on the very next request (cfg() always re-reads live).
+func (s *Server) effectiveToken() string {
+	if t := s.cfg().Admin.Token; t != "" {
+		return t
+	}
+	return s.setupToken
+}
+
 // ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.handler.ServeHTTP(w, r)
@@ -129,4 +168,30 @@ func randomHex(n int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// setupTokenPath returns the path of the file the CLI (cmd/hodor,
+// adminRequest) reads the setup token from when cfg.Admin.Token is
+// empty: next to state_file, which is itself already defaulted to the
+// zero-file-setup data dir (HODOR_DATA_DIR, or /data - see
+// internal/config.dataDir/Config.Validate). Both the server and the
+// CLI derive it the same way, so no new config field is needed.
+func setupTokenPath(cfg *config.Config) string {
+	return filepath.Join(filepath.Dir(cfg.StateFile), "setup.token")
+}
+
+// writeSetupTokenFile atomically (write-to-temp + rename) writes token
+// to path with 0600 permissions, so the CLI (running as the same user/
+// container, e.g. `docker exec hodor hodor open x`) can read it without
+// it ever appearing half-written or world-readable.
+func writeSetupTokenFile(path, token string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(token+"\n"), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }

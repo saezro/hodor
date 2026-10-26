@@ -66,6 +66,11 @@ be silently blocked by the browser. panel.js reads the island by id.
   </header>
 
   <main id="app">
+    <div id="setup-banner" class="setup-banner" role="alert" hidden>
+      <span id="setup-banner-text"></span>
+      <button type="button" class="primary" id="setup-banner-link"></button>
+    </div>
+
     <nav class="tabs" aria-label="{{.Strings.NavLabel}}">
       <a href="#services" class="tab-link is-active" data-tab="services">{{.Strings.TabServices}}</a>
       <a href="#pins" class="tab-link" data-tab="pins">{{.Strings.TabPins}}<span class="count-badge" id="pins-count" hidden>0</span></a>
@@ -309,6 +314,12 @@ be silently blocked by the browser. panel.js reads the island by id.
     <form id="login-form">
       <h3 id="login-dialog-title"></h3>
       <p id="login-dialog-desc"></p>
+      <div id="login-setup-block" class="login-setup-block" hidden>
+        <div class="key-reveal">
+          <code id="login-setup-cmd">docker logs hodor | grep 'setup token'</code>
+          <button type="button" id="login-setup-copy-btn"></button>
+        </div>
+      </div>
       <div class="field">
         <label for="login-token" id="login-token-label"></label>
         <input id="login-token" type="password" autocomplete="current-password" autofocus>

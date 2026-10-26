@@ -99,3 +99,7 @@ Goal: `docker run` with no `hodor.yaml` at all is a fully working install.
 - Dockerfile: `ENV HODOR_CONFIG=/data/hodor.yaml`, `ENV HODOR_DATA_DIR=/data`; `/data` pre-created and chowned to nonroot (65532) in the distroless final stage so it's writable without a host bind-mount.
 - `examples/docker-compose.yml`: new minimal file, image only, no `hodor.yaml`. `examples/docker-compose.cloudflared.yml`: dropped the `hodor.yaml` mount and `HODOR_CONFIG` env — also zero-file now.
 - README Quick start leads with `docker run` + "open the panel, add services"; the yaml-based setup moved to "Avanzado (opcional)".
+- Setup token: random hex, in-memory, printed to `docker logs` and written 0600 to `<data dir>/setup.token` for the CLI, while `admin.token` is unset; a new one on every restart until an `admin_token` is fixed, after which it stops working.
+- The 401 on `/api/*` and `/metrics` carries `X-Hodor-Setup: 1` while the setup token is still active, so the panel knows to prompt for it; there is no longer an admin-without-auth mode, and `/metrics` is bearer-gated same as the API.
+- `on_change` (`validateOnChange`): only `http`/`https` with a host; `webhook.Notifier`'s client never follows redirects, so a 3xx from the configured endpoint can't retarget the POST.
+- Missing `hodor.yaml` → defaults only, accepted (zero-file setup); the Dockerfile's `HODOR_CONFIG=/data/hodor.yaml` is intentional and has no auth impact.

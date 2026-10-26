@@ -329,6 +329,10 @@ func (c *Config) Validate() error {
 	}
 	c.ParsedPassTTL = ttl
 
+	if err := validateOnChange(c.OnChange); err != nil {
+		return err
+	}
+
 	names := map[string]bool{}
 	hosts := map[string]string{}
 	for i := range c.Services {
@@ -488,6 +492,27 @@ func isHexString(s string) bool {
 		}
 	}
 	return true
+}
+
+// validateOnChange checks that onChange, if set, is an http(s) URL with
+// a host: internal/webhook.Notifier POSTs to it unauthenticated, so a
+// scheme like file:// or javascript: (or a bare host with no scheme)
+// must be rejected rather than reaching http.Client.
+func validateOnChange(onChange string) error {
+	if onChange == "" {
+		return nil
+	}
+	u, err := url.Parse(onChange)
+	if err != nil {
+		return fmt.Errorf("on_change: invalid URL %q: %w", onChange, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("on_change: %q must use http or https", onChange)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("on_change: %q is missing a host", onChange)
+	}
+	return nil
 }
 
 // ValidateOrigin checks that origin is a bare scheme+host, as required

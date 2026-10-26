@@ -321,6 +321,31 @@ func TestValidate_Table(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name:    "on_change invalid scheme ftp",
+			mutate:  func(c *Config) { c.OnChange = "ftp://x" },
+			wantErr: true,
+		},
+		{
+			name:    "on_change javascript scheme",
+			mutate:  func(c *Config) { c.OnChange = "javascript:alert(1)" },
+			wantErr: true,
+		},
+		{
+			name:    "on_change missing host",
+			mutate:  func(c *Config) { c.OnChange = "http://" },
+			wantErr: true,
+		},
+		{
+			name:    "on_change valid https with path",
+			mutate:  func(c *Config) { c.OnChange = "https://h/x" },
+			wantErr: false,
+		},
+		{
+			name:    "on_change empty is fine (optional)",
+			mutate:  func(c *Config) { c.OnChange = "" },
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

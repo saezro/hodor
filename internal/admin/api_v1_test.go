@@ -228,14 +228,27 @@ func TestV1_RateLimitPerKey(t *testing.T) {
 }
 
 // TestV1_PanelAPIStillRequiresCSRF makes sure introducing /api/v1/*
-// did not loosen the existing /api/* CSRF requirement.
+// did not loosen the existing /api/* auth requirements: no bearer at
+// all gets the generic 401 (with the setup-mode hint header), and a
+// valid but scoped /api/v1 key gets an explicit 403 rather than being
+// allowed onto the panel's own /api/*.
 func TestV1_PanelAPIStillRequiresCSRF(t *testing.T) {
 	cfg := newTestConfig(t, nil)
 	srv, _, _ := newTestServer(t, cfg)
 	const remote = "127.0.0.1:1234"
 
 	rec := doReq(srv, http.MethodPost, "/api/services/svc1/open", remote, nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("POST /api/services/svc1/open without bearer = %d, want 401: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("X-Hodor-Setup") != "1" {
+		t.Fatalf("POST /api/services/svc1/open without bearer: X-Hodor-Setup = %q, want %q", rec.Header().Get("X-Hodor-Setup"), "1")
+	}
+
+	keyCfg, raw := cfgWithKey(t, config.APIKey{ID: "k1", Name: "k", Services: []string{"svc1"}, Actions: []string{"open"}})
+	keySrv, _, _ := newTestServer(t, keyCfg)
+	rec = doReq(keySrv, http.MethodPost, "/api/services/svc1/open", remote, map[string]string{"Authorization": "Bearer " + raw})
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("POST /api/services/svc1/open without CSRF = %d, want 403: %s", rec.Code, rec.Body.String())
+		t.Fatalf("POST /api/services/svc1/open with scoped /api/v1 key = %d, want 403: %s", rec.Code, rec.Body.String())
 	}
 }

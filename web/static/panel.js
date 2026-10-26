@@ -69,9 +69,12 @@
       genLockoutError: "This change would lock you out of the panel: your IP wouldn't be in the allowed list.",
       genNothingChanged: "Nothing to save.",
       loginTitle: "Admin access required", loginDesc: "This panel needs the admin token to continue.",
+      loginSetupDesc: "First access: enter the setup code shown in the container logs.",
       loginLabel: "Admin token", loginSubmit: "Enter",
       loginError: "Incorrect token.", loginFailed: "Could not check the token.",
-      logoutBtn: "Log out"
+      logoutBtn: "Log out",
+      setupBannerText: "Set an admin token in Settings → General; the setup code changes on every restart.",
+      setupBannerLink: "Go to Settings"
     },
     es: {
       open: "Abierto", closed: "Cerrado", openFor: "Abrir", close: "Cerrar",
@@ -128,9 +131,12 @@
       genLockoutError: "Ese cambio te dejaría sin acceso al panel: tu IP no estaría en la lista permitida.",
       genNothingChanged: "No hay nada que guardar.",
       loginTitle: "Acceso de administrador requerido", loginDesc: "Este panel necesita el token de administrador para continuar.",
+      loginSetupDesc: "Primer acceso: introduce el código de setup que aparece en los logs del contenedor.",
       loginLabel: "Token de administrador", loginSubmit: "Entrar",
       loginError: "Token incorrecto.", loginFailed: "No se pudo comprobar el token.",
-      logoutBtn: "Cerrar sesión"
+      logoutBtn: "Cerrar sesión",
+      setupBannerText: "Fija un admin token en Configuración → General; el código de setup cambia en cada reinicio.",
+      setupBannerLink: "Ir a Configuración"
     }
   }[LANG];
 
@@ -166,6 +172,32 @@
     pill.textContent = STR.offline;
   }
 
+  // ---- Setup banner --------------------------------------------------
+  // Persistent (non-modal) nudge shown while admin.token is still unset
+  // (setup mode: see applyLoginDialogMode below for the login side of
+  // this). Driven by general.admin_token_set from GET /api/config(/general),
+  // refreshed on load and every time renderGeneral() re-renders (i.e.
+  // after visiting Settings or changing the token there).
+  var setupBanner = document.getElementById("setup-banner");
+  var setupBannerLinkBtn = document.getElementById("setup-banner-link");
+
+  function updateSetupBanner(tokenSet) {
+    if (!setupBanner) return;
+    setupBanner.hidden = !!tokenSet;
+  }
+
+  if (setupBanner) {
+    document.getElementById("setup-banner-text").textContent = STR.setupBannerText;
+    setupBannerLinkBtn.textContent = STR.setupBannerLink;
+    setupBannerLinkBtn.addEventListener("click", function () {
+      showTab("settings");
+      history.replaceState(null, "", "#settings");
+      var advanced = document.getElementById("general-advanced");
+      if (advanced) advanced.open = true;
+      document.getElementById("gen-admin-token").focus();
+    });
+  }
+
   // ---- Admin token (sessionStorage) ----------------------------------
   // The admin listener requires `Authorization: Bearer <admin.token>` on
   // every /api/* call once admin.token is configured (see
@@ -193,8 +225,24 @@
   var loginInput = document.getElementById("login-token");
   var loginSubmitBtn = document.getElementById("login-submit-btn");
 
-  function showLoginDialog() {
+  var loginDialogDesc = document.getElementById("login-dialog-desc");
+  var loginSetupBlock = document.getElementById("login-setup-block");
+  var loginSetupCopyBtn = document.getElementById("login-setup-copy-btn");
+
+  // Setup mode: no admin.token configured yet, server hands out a
+  // one-off setup token printed in its logs instead. Any 401 carries
+  // `X-Hodor-Setup: 1` while that's the case (see api() below), which
+  // flips the login dialog's copy so the first run tells people where
+  // to find the code instead of implying they already have one.
+  function applyLoginDialogMode(setup) {
+    if (!loginDialog) return;
+    loginDialogDesc.textContent = setup ? STR.loginSetupDesc : STR.loginDesc;
+    loginSetupBlock.hidden = !setup;
+  }
+
+  function showLoginDialog(setup) {
     if (!loginDialog || loginDialog.open) return;
+    applyLoginDialogMode(!!setup);
     loginError.hidden = true;
     loginInput.value = "";
     loginDialog.showModal();
@@ -203,9 +251,13 @@
 
   if (loginDialog) {
     document.getElementById("login-dialog-title").textContent = STR.loginTitle;
-    document.getElementById("login-dialog-desc").textContent = STR.loginDesc;
     document.getElementById("login-token-label").textContent = STR.loginLabel;
     loginSubmitBtn.textContent = STR.loginSubmit;
+    loginSetupCopyBtn.textContent = STR.copy;
+    loginSetupCopyBtn.addEventListener("click", function () {
+      copyText(document.getElementById("login-setup-cmd").textContent, loginSetupCopyBtn);
+    });
+    applyLoginDialogMode(false);
   }
 
   if (loginForm) {
@@ -218,6 +270,7 @@
       fetch("/api/services", { headers: { "Authorization": "Bearer " + value } })
         .then(function (r) {
           if (r.status === 401) {
+            applyLoginDialogMode(r.headers.get("X-Hodor-Setup") === "1");
             loginError.textContent = STR.loginError;
             loginError.hidden = false;
             return;
@@ -252,7 +305,7 @@
     }).then(function (r) {
       setOffline(false);
       if (!r.ok) {
-        if (r.status === 401) showLoginDialog();
+        if (r.status === 401) showLoginDialog(r.headers.get("X-Hodor-Setup") === "1");
         return r.json().catch(function () { return {}; }).then(function (b) {
           // body kept on the error so settings forms can show the
           // per-field message from a 400 {"errors":{field:msg}} instead
@@ -898,6 +951,7 @@
 
     document.getElementById("gen-admin-token").value = "";
     renderAdminTokenStatus(!!originalGeneral.admin_token_set);
+    updateSetupBanner(!!originalGeneral.admin_token_set);
   }
 
   generalForm.addEventListener("submit", function (ev) {
@@ -1054,4 +1108,12 @@
 
   loadAll();
   setInterval(loadAll, 5000);
+
+  // Prime the setup banner even if the user never opens Settings: a
+  // fresh login in setup mode should see the nudge right away, not
+  // only after clicking into the General tab. Quiet failure (e.g. still
+  // logged out): the login dialog already covers that case.
+  api("/api/config").then(function (cfg) {
+    updateSetupBanner(!!(cfg.general && cfg.general.admin_token_set));
+  }).catch(function () {});
 })();

@@ -60,6 +60,8 @@ docker run -d --name hodor \
 
 No config file needed. Open `http://<ip-lan>:8081` → pestaña **Configuración/Settings** → añade servicios. hodor starts closed by default and stays that way until someone on the LAN opens something.
 
+First access asks for the setup token: `docker logs hodor | grep 'setup token'`. It's replaced once you set `admin_token`.
+
 Point your Cloudflare Tunnel (or Traefik/Caddy/nginx) at hodor's public listener (`8080`), keep `8081` on the LAN/VPN only, and you're closed by default. See [`examples/`](examples/) for ready-to-adapt compose files.
 
 ### Avanzado (opcional): `hodor.yaml`

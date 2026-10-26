@@ -71,9 +71,18 @@ func doReq(srv *Server, method, path, remoteAddr string, headers map[string]stri
 	return rec
 }
 
+// bearerHeaders returns an Authorization header carrying srv's
+// effective bearer token (admin.token once configured, otherwise the
+// in-memory setup token - see Server.effectiveToken): every /api/*
+// request needs one since the zero-file/no-admin.token fix, there is
+// no more unauthenticated mode.
+func bearerHeaders(srv *Server) map[string]string {
+	return map[string]string{"Authorization": "Bearer " + srv.effectiveToken()}
+}
+
 func csrfToken(t *testing.T, srv *Server, remoteAddr string) string {
 	t.Helper()
-	rec := doReq(srv, http.MethodGet, "/api/csrf", remoteAddr, nil)
+	rec := doReq(srv, http.MethodGet, "/api/csrf", remoteAddr, bearerHeaders(srv))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/csrf = %d, want 200", rec.Code)
 	}
@@ -143,15 +152,19 @@ func TestCSRF_RequiredForMutatingAPI(t *testing.T) {
 	srv, _, _ := newTestServer(t, cfg)
 	const remote = "127.0.0.1:1234"
 
+	// No bearer at all (even with a would-be CSRF token): 401, same as
+	// any other unauthenticated /api/* call now that there's no
+	// unauthenticated mode (checkBearer/effectiveToken).
 	rec := doReq(srv, http.MethodPost, "/api/services/svc1/open", remote, nil)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("POST without X-CSRF-Token = %d, want 403: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("POST without bearer = %d, want 401: %s", rec.Code, rec.Body.String())
 	}
 
-	token := csrfToken(t, srv, remote)
-	rec = doReq(srv, http.MethodPost, "/api/services/svc1/open", remote, map[string]string{"X-CSRF-Token": token})
+	// A valid bearer short-circuits the CSRF check entirely (csrfAndAuth
+	// only enforces it when !bearerOK): no X-CSRF-Token needed here.
+	rec = doReq(srv, http.MethodPost, "/api/services/svc1/open", remote, bearerHeaders(srv))
 	if rec.Code != http.StatusNoContent {
-		t.Fatalf("POST with valid X-CSRF-Token = %d, want 204: %s", rec.Code, rec.Body.String())
+		t.Fatalf("POST with valid bearer (no CSRF token) = %d, want 204: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -160,7 +173,7 @@ func TestOpenClose_ServiceAndGroup(t *testing.T) {
 	srv, st, _ := newTestServer(t, cfg)
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	// Standalone service.
 	rec := doReq(srv, http.MethodPost, "/api/services/svc1/open", remote, headers)
@@ -218,6 +231,7 @@ func TestApprovePin_RateLimitedPerIP(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/pins", body())
 		req.RemoteAddr = remote
 		req.Header.Set("X-CSRF-Token", token)
+		req.Header.Set("Authorization", "Bearer "+srv.effectiveToken())
 		rec := httptest.NewRecorder()
 		srv.ServeHTTP(rec, req)
 		return rec

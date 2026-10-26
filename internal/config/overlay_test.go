@@ -237,6 +237,37 @@ func TestMergeGeneral_PassTTL_DefaultsWhenNeitherSet(t *testing.T) {
 	}
 }
 
+// TestLive_PutGeneral_OnChange_ValidatesURL exercises validateOnChange
+// through the overlay/PUT path (Live.PutGeneral), not just the base
+// yaml path covered by TestValidate_Table: an invalid on_change must
+// be rejected (and the overlay left untouched) and a valid one
+// accepted.
+func TestLive_PutGeneral_OnChange_ValidatesURL(t *testing.T) {
+	basePath := writeBaseAndOverlay(t, "", "")
+	live, err := NewLive(basePath)
+	if err != nil {
+		t.Fatalf("NewLive: %v", err)
+	}
+
+	for _, v := range []string{"ftp://x", "javascript:alert(1)", "http://"} {
+		t.Run(fmt.Sprintf("invalid %q", v), func(t *testing.T) {
+			bad := v
+			if _, err := live.PutGeneral(GeneralPatch{OnChange: &bad}, nil); err == nil {
+				t.Fatalf("PutGeneral(on_change=%q): want error, got nil", v)
+			}
+		})
+	}
+
+	good := "https://h/x"
+	merged, err := live.PutGeneral(GeneralPatch{OnChange: &good}, nil)
+	if err != nil {
+		t.Fatalf("PutGeneral(on_change=%q): unexpected error: %v", good, err)
+	}
+	if merged.OnChange != good {
+		t.Errorf("merged.OnChange = %q, want %q", merged.OnChange, good)
+	}
+}
+
 // TestValidate_AdminAllowCIDRsEnv_EmptyOrBlank_Errors covers both
 // HODOR_ADMIN_ALLOW_CIDRS="" and a value that's blank once trimmed
 // (e.g. " , "): both must fail validation rather than silently

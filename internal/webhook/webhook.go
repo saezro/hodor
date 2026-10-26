@@ -25,7 +25,17 @@ func Notifier(url string, logger *slog.Logger) func(msg string) {
 	if url == "" {
 		return func(string) {}
 	}
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		// on_change points at a user-controlled URL (config.go
+		// validates scheme+host but not what's behind it); don't
+		// follow redirects, which could otherwise be used to retarget
+		// the POST (and its JSON body) at an internal/unexpected
+		// endpoint.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	queue := make(chan string, queueSize)
 
 	go func() {

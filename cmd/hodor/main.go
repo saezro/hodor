@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -361,30 +362,36 @@ func adminRequest(cfg *config.Config, method, path string, body any) (*http.Resp
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if cfg.Admin.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+cfg.Admin.Token)
-	} else if method == http.MethodPost || method == http.MethodDelete {
-		tok, err := fetchCSRF(cfg)
+	token := cfg.Admin.Token
+	if token == "" {
+		var err error
+		token, err = readSetupToken(cfg)
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Set("X-CSRF-Token", tok)
 	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	client := &http.Client{Timeout: 10 * time.Second}
 	return client.Do(req)
 }
 
-func fetchCSRF(cfg *config.Config) (string, error) {
-	resp, err := http.Get(adminBaseURL(cfg) + "/api/csrf")
+// setupTokenPath mirrors internal/admin.setupTokenPath: the setup token
+// file lives next to state_file, which is itself already defaulted to
+// the zero-file-setup data dir (HODOR_DATA_DIR, or /data).
+func setupTokenPath(cfg *config.Config) string {
+	return filepath.Join(filepath.Dir(cfg.StateFile), "setup.token")
+}
+
+// readSetupToken reads the setup token written by the admin server when
+// no admin.token is configured (see internal/admin.New), so the CLI
+// (e.g. `docker exec hodor hodor open x`) can authenticate without one.
+func readSetupToken(cfg *config.Config) (string, error) {
+	path := setupTokenPath(cfg)
+	b, err := os.ReadFile(path) // #nosec G304 -- path derived from operator config (data dir)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("no admin token configured and %s not readable: set admin.token or run where the data dir is accessible", path)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	var out admin.CSRFResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", err
-	}
-	return out.Token, nil
+	return strings.TrimSpace(string(b)), nil
 }
 
 func cmdOpen(args []string) error {

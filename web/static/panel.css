@@ -428,6 +428,24 @@ button.danger:hover { background: var(--status-closed-bg); }
 .hodor-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .hodor-dialog h3 { margin: 0 0 1rem; font-size: 1rem; }
 
+.setup-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  background: rgba(242, 183, 102, 0.14);
+  border: 1px solid rgba(242, 183, 102, 0.35);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.9rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.85rem;
+}
+.setup-banner span { flex: 1 1 14rem; }
+
+.login-setup-block { margin: -0.25rem 0 0.85rem; }
+
 @media (min-width: 640px) {
   main#app { padding-top: 1.5rem; }
   .row { padding: 1rem 1.25rem; }

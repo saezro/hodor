@@ -92,7 +92,7 @@ func TestConfigAPI_ServicePutDelete_BaseConflict(t *testing.T) {
 	srv, _ := newLiveTestServer(t, "")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	rec := doReqBody(srv, http.MethodPut, "/api/config/services/svc1", remote, headers, `{"hosts":["x.example.com"],"mode":"proxy","upstream":"http://127.0.0.1:1"}`)
 	if rec.Code != http.StatusConflict {
@@ -109,14 +109,14 @@ func TestConfigAPI_ServicePut_NewOverlayService_RoutesAndSourced(t *testing.T) {
 	srv, _ := newLiveTestServer(t, "")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	rec := doReqBody(srv, http.MethodPut, "/api/config/services/svc2", remote, headers, `{"hosts":["svc2.example.com"],"mode":"proxy","upstream":"http://127.0.0.1:9002"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("PUT new overlay service svc2 = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 
-	rec = doReq(srv, http.MethodGet, "/api/config", remote, nil)
+	rec = doReq(srv, http.MethodGet, "/api/config", remote, bearerHeaders(srv))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/config = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
@@ -138,7 +138,7 @@ func TestConfigAPI_ServicePut_NewOverlayService_RoutesAndSourced(t *testing.T) {
 	}
 
 	// Enrouted: GET /api/services (the state/routing list) carries it too.
-	rec = doReq(srv, http.MethodGet, "/api/services", remote, nil)
+	rec = doReq(srv, http.MethodGet, "/api/services", remote, bearerHeaders(srv))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/services = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
@@ -151,7 +151,7 @@ func TestConfigAPI_ServicePut_InvalidUpstream_400(t *testing.T) {
 	srv, _ := newLiveTestServer(t, "")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	rec := doReqBody(srv, http.MethodPut, "/api/config/services/svc2", remote, headers, `{"hosts":["svc2.example.com"],"mode":"proxy","upstream":"not-a-url"}`)
 	if rec.Code != http.StatusBadRequest {
@@ -170,7 +170,7 @@ func TestConfigAPI_ServicePut_InvalidName_400(t *testing.T) {
 	srv, _ := newLiveTestServer(t, "")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	rec := doReqBody(srv, http.MethodPut, "/api/config/services/bad%20name", remote, headers, `{"hosts":["svc2.example.com"],"mode":"proxy","upstream":"http://127.0.0.1:9002"}`)
 	if rec.Code != http.StatusBadRequest {
@@ -182,7 +182,7 @@ func TestConfigAPI_KeyCreate_RawOnceAndHashOnDisk(t *testing.T) {
 	srv, overlayPath := newLiveTestServer(t, "")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	rec := doReqBody(srv, http.MethodPost, "/api/config/keys", remote, headers, `{"name":"btn","services":["svc1"],"actions":["open"]}`)
 	if rec.Code != http.StatusCreated {
@@ -212,7 +212,7 @@ func TestConfigAPI_KeyDelete_BaseConflict(t *testing.T) {
 	srv, _ := newLiveTestServer(t, "api_keys:\n  - id: k1\n    name: k\n    hash: \""+strings.Repeat("a", 64)+"\"\n    services: [svc1]\n    actions: [status]\n")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	rec := doReqBody(srv, http.MethodDelete, "/api/config/keys/k1", remote, headers, "")
 	if rec.Code != http.StatusConflict {
@@ -224,7 +224,7 @@ func TestConfigAPI_Reload_OK(t *testing.T) {
 	srv, _ := newLiveTestServer(t, "")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	rec := doReqBody(srv, http.MethodPost, "/api/config/reload", remote, headers, "")
 	if rec.Code != http.StatusOK {
@@ -243,7 +243,7 @@ func TestConfigAPI_GeneralPut_OKAndNotExposed(t *testing.T) {
 	srv, overlayPath := newLiveTestServer(t, "")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	rec := doReqBody(srv, http.MethodPut, "/api/config/general", remote, headers, `{"admin_token":"newtok","pass_ttl":"48h"}`)
 	if rec.Code != http.StatusOK {
@@ -272,7 +272,7 @@ func TestConfigAPI_GeneralPut_OKAndNotExposed(t *testing.T) {
 	}
 
 	// GET /api/config must not expose it either.
-	rec = doReq(srv, http.MethodGet, "/api/config", remote, nil)
+	rec = doReq(srv, http.MethodGet, "/api/config", remote, bearerHeaders(srv))
 	if strings.Contains(rec.Body.String(), "newtok") {
 		t.Errorf("GET /api/config response leaks the raw token: %s", rec.Body.String())
 	}
@@ -282,14 +282,14 @@ func TestConfigAPI_GeneralPut_BaseFieldLocked409(t *testing.T) {
 	srv, _ := newLiveTestServer(t, "pass_ttl: 12h\n")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	rec := doReqBody(srv, http.MethodPut, "/api/config/general", remote, headers, `{"pass_ttl":"24h"}`)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("PUT /api/config/general on base-locked field = %d, want 409: %s", rec.Code, rec.Body.String())
 	}
 
-	rec = doReq(srv, http.MethodGet, "/api/config", remote, nil)
+	rec = doReq(srv, http.MethodGet, "/api/config", remote, bearerHeaders(srv))
 	var resp ConfigGetResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -309,7 +309,7 @@ func TestConfigAPI_GeneralPut_Lockout400(t *testing.T) {
 	srv, _ := newLiveTestServer(t, "")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	// Setting allow_cidrs to a range that excludes the caller's own IP
 	// (127.0.0.1) must be rejected before anything is written.
@@ -318,7 +318,7 @@ func TestConfigAPI_GeneralPut_Lockout400(t *testing.T) {
 		t.Fatalf("PUT /api/config/general locking caller out = %d, want 400: %s", rec.Code, rec.Body.String())
 	}
 
-	rec = doReq(srv, http.MethodGet, "/api/config", remote, nil)
+	rec = doReq(srv, http.MethodGet, "/api/config", remote, bearerHeaders(srv))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/config after rejected lockout = %d, want 200 (caller still allowed): %s", rec.Code, rec.Body.String())
 	}
@@ -333,7 +333,7 @@ func TestConfigAPI_GeneralPut_UnknownField_RejectedAndNotWritten(t *testing.T) {
 	srv, overlayPath := newLiveTestServer(t, "")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	rec := doReqBody(srv, http.MethodPut, "/api/config/general", remote, headers, `{"admin_trusted_proxies":["0.0.0.0/0"]}`)
 	if rec.Code != http.StatusBadRequest {
@@ -358,7 +358,7 @@ func TestConfigAPI_GeneralPut_HotSwap_AllowCIDRsTakeEffectImmediately(t *testing
 	const remote = "127.0.0.1:1234"
 	const otherRemote = "203.0.113.5:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	// otherRemote starts out allowed (default CIDRs include public space? no -
 	// defaults are private ranges only, so confirm it's denied beforehand).
@@ -391,7 +391,7 @@ func TestConfigAPI_DurationsPut_Invalid(t *testing.T) {
 	srv, _ := newLiveTestServer(t, "")
 	const remote = "127.0.0.1:1234"
 	token := csrfToken(t, srv, remote)
-	headers := map[string]string{"X-CSRF-Token": token}
+	headers := map[string]string{"X-CSRF-Token": token, "Authorization": "Bearer " + srv.effectiveToken()}
 
 	rec := doReqBody(srv, http.MethodPut, "/api/config/durations", remote, headers, `{"durations":["not-a-duration"]}`)
 	if rec.Code != http.StatusBadRequest {
