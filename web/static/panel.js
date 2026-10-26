@@ -14,7 +14,8 @@
     en: {
       open: "Open", closed: "Closed", openFor: "Open", close: "Close",
       until: "until", forever: "no timer", by: "by", group: "group",
-      noServices: "No services configured.", noPins: "No pending PINs.",
+      noServices: "No services configured.",
+      noServicesEmpty: "No services yet — add the first one.", noPins: "No pending PINs.",
       noPasses: "No device passes yet.", noEvents: "No events yet.",
       approve: "Approve", revoke: "Revoke", revoked: "revoked",
       opened: "opened", wasClosed: "closed", expired: "closed (expired)", approved: "approved",
@@ -47,12 +48,36 @@
       keyResultValueLabel: "API key", keyResultSnippetLabel: "Embeddable snippet (script or iframe)",
       copy: "Copy", copied: "Copied", closeBtn: "Close",
       reloadHeading: "Reload configuration", reloadBtn: "Reload config",
-      reloadDone: "config reloaded", reloadWarnings: "Reloaded with warnings:"
+      reloadDone: "config reloaded", reloadWarnings: "Reloaded with warnings:",
+      // General settings block (see render in panel.js below).
+      genHeading: "General", genSave: "Save", genSaved: "general settings saved",
+      genLocked: "locked by file/env",
+      genLangLabel: "Language", genAdminPublicUrlLabel: "Public admin URL",
+      genAdminAllowCidrsLabel: "Allowed admin IPs/CIDRs (one per line)",
+      genOnChangeLabel: "Webhook on change", genPassTtlLabel: "Pass duration",
+      genAdvancedSummary: "Advanced",
+      genAdminTokenLabel: "Admin token", genAdminTokenConfigured: "configured",
+      genAdminTokenNotConfigured: "not configured",
+      genAdminTokenSet: "Set", genAdminTokenClear: "Remove",
+      genAdminTokenSetOk: "admin token set", genAdminTokenClearedOk: "admin token removed",
+      genAdminTokenEmpty: "Type a new token first.",
+      genAdminTrustedProxiesLabel: "Admin trusted proxies (one per line)",
+      genAdminTrustedHeaderLabel: "Admin trusted header",
+      genPublicTrustedProxiesLabel: "Public trusted proxies (one per line)",
+      genPublicCookieSecureLabel: "Secure cookie",
+      genFixedNote: "Ports, secret and data folder are changed with environment variables and require a restart.",
+      genLockoutError: "This change would lock you out of the panel: your IP wouldn't be in the allowed list.",
+      genNothingChanged: "Nothing to save.",
+      loginTitle: "Admin access required", loginDesc: "This panel needs the admin token to continue.",
+      loginLabel: "Admin token", loginSubmit: "Enter",
+      loginError: "Incorrect token.", loginFailed: "Could not check the token.",
+      logoutBtn: "Log out"
     },
     es: {
       open: "Abierto", closed: "Cerrado", openFor: "Abrir", close: "Cerrar",
       until: "hasta", forever: "sin límite", by: "por", group: "grupo",
-      noServices: "No hay servicios configurados.", noPins: "No hay PINs pendientes.",
+      noServices: "No hay servicios configurados.",
+      noServicesEmpty: "Aún no hay servicios — añade el primero.", noPins: "No hay PINs pendientes.",
       noPasses: "Aún no hay pases de dispositivo.", noEvents: "Aún no hay eventos.",
       approve: "Aprobar", revoke: "Revocar", revoked: "revocado",
       opened: "abierto", wasClosed: "cerrado", expired: "cerrado (caducado)", approved: "aprobado",
@@ -83,7 +108,29 @@
       keyResultValueLabel: "Clave de API", keyResultSnippetLabel: "Fragmento insertable (script o iframe)",
       copy: "Copiar", copied: "Copiado", closeBtn: "Cerrar",
       reloadHeading: "Recargar configuración", reloadBtn: "Recargar config",
-      reloadDone: "config recargada", reloadWarnings: "Recargada con avisos:"
+      reloadDone: "config recargada", reloadWarnings: "Recargada con avisos:",
+      genHeading: "General", genSave: "Guardar", genSaved: "configuración general guardada",
+      genLocked: "fijado por archivo/entorno",
+      genLangLabel: "Idioma", genAdminPublicUrlLabel: "URL pública del panel",
+      genAdminAllowCidrsLabel: "IPs/CIDRs permitidas para el panel (una por línea)",
+      genOnChangeLabel: "Webhook al cambiar", genPassTtlLabel: "Duración del pase",
+      genAdvancedSummary: "Avanzado",
+      genAdminTokenLabel: "Token de administración", genAdminTokenConfigured: "configurado",
+      genAdminTokenNotConfigured: "no configurado",
+      genAdminTokenSet: "Establecer", genAdminTokenClear: "Quitar",
+      genAdminTokenSetOk: "token de admin establecido", genAdminTokenClearedOk: "token de admin quitado",
+      genAdminTokenEmpty: "Escribe primero un token nuevo.",
+      genAdminTrustedProxiesLabel: "Proxies de confianza del panel (una por línea)",
+      genAdminTrustedHeaderLabel: "Cabecera de confianza del panel",
+      genPublicTrustedProxiesLabel: "Proxies de confianza públicos (una por línea)",
+      genPublicCookieSecureLabel: "Cookie segura",
+      genFixedNote: "Puertos, secreto y carpeta de datos se cambian con variables de entorno y requieren reinicio.",
+      genLockoutError: "Ese cambio te dejaría sin acceso al panel: tu IP no estaría en la lista permitida.",
+      genNothingChanged: "No hay nada que guardar.",
+      loginTitle: "Acceso de administrador requerido", loginDesc: "Este panel necesita el token de administrador para continuar.",
+      loginLabel: "Token de administrador", loginSubmit: "Entrar",
+      loginError: "Token incorrecto.", loginFailed: "No se pudo comprobar el token.",
+      logoutBtn: "Cerrar sesión"
     }
   }[LANG];
 
@@ -119,11 +166,85 @@
     pill.textContent = STR.offline;
   }
 
+  // ---- Admin token (sessionStorage) ----------------------------------
+  // The admin listener requires `Authorization: Bearer <admin.token>` on
+  // every /api/* call once admin.token is configured (see
+  // internal/admin/middleware.go csrfAndAuth). The panel itself has no
+  // other way to carry that token, so it's kept in sessionStorage (never
+  // persisted to disk/localStorage) and attached by api() below. Wrapped
+  // in try/catch: sessionStorage can throw in locked-down contexts
+  // (private browsing, disabled storage).
+  var ADMIN_TOKEN_KEY = "hodor.adminToken";
+
+  function getAdminToken() {
+    try { return sessionStorage.getItem(ADMIN_TOKEN_KEY) || ""; } catch (e) { return ""; }
+  }
+
+  function setAdminToken(tok) {
+    try {
+      if (tok) sessionStorage.setItem(ADMIN_TOKEN_KEY, tok);
+      else sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    } catch (e) { /* storage unavailable, nothing we can do */ }
+  }
+
+  var loginDialog = document.getElementById("login-dialog");
+  var loginForm = document.getElementById("login-form");
+  var loginError = document.getElementById("login-form-error");
+  var loginInput = document.getElementById("login-token");
+  var loginSubmitBtn = document.getElementById("login-submit-btn");
+
+  function showLoginDialog() {
+    if (!loginDialog || loginDialog.open) return;
+    loginError.hidden = true;
+    loginInput.value = "";
+    loginDialog.showModal();
+    loginInput.focus();
+  }
+
+  if (loginDialog) {
+    document.getElementById("login-dialog-title").textContent = STR.loginTitle;
+    document.getElementById("login-dialog-desc").textContent = STR.loginDesc;
+    document.getElementById("login-token-label").textContent = STR.loginLabel;
+    loginSubmitBtn.textContent = STR.loginSubmit;
+  }
+
+  if (loginForm) {
+    loginForm.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var value = loginInput.value.trim();
+      loginError.hidden = true;
+      if (!value) return;
+      loginSubmitBtn.disabled = true;
+      fetch("/api/services", { headers: { "Authorization": "Bearer " + value } })
+        .then(function (r) {
+          if (r.status === 401) {
+            loginError.textContent = STR.loginError;
+            loginError.hidden = false;
+            return;
+          }
+          if (!r.ok) {
+            loginError.textContent = STR.loginFailed;
+            loginError.hidden = false;
+            return;
+          }
+          setAdminToken(value);
+          location.reload();
+        })
+        .catch(function () {
+          loginError.textContent = STR.loginFailed;
+          loginError.hidden = false;
+        })
+        .finally(function () { loginSubmitBtn.disabled = false; });
+    });
+  }
+
   function api(path, opts) {
     opts = opts || {};
     var headers = opts.headers || {};
     if (opts.method && opts.method !== "GET") headers["X-CSRF-Token"] = CSRF;
     if (opts.body) headers["Content-Type"] = "application/json";
+    var token = getAdminToken();
+    if (token) headers["Authorization"] = "Bearer " + token;
     return fetch(path, {
       method: opts.method || "GET",
       headers: headers,
@@ -131,6 +252,7 @@
     }).then(function (r) {
       setOffline(false);
       if (!r.ok) {
+        if (r.status === 401) showLoginDialog();
         return r.json().catch(function () { return {}; }).then(function (b) {
           // body kept on the error so settings forms can show the
           // per-field message from a 400 {"errors":{field:msg}} instead
@@ -150,12 +272,21 @@
 
   // ---- Services -----------------------------------------------------
 
+  function emptyServicesState() {
+    var addBtn = el("button", { class: "primary", type: "button", text: STR.svcAdd });
+    addBtn.addEventListener("click", function () { openServiceDialog(null); });
+    return el("div", { class: "empty-state" }, [
+      el("div", { class: "empty", text: STR.noServicesEmpty }),
+      addBtn
+    ]);
+  }
+
   function renderServices(services) {
     var list = document.getElementById("services-list");
     list.setAttribute("aria-busy", "false");
     list.innerHTML = "";
     if (!services.length) {
-      list.appendChild(el("div", { class: "empty", text: STR.noServices }));
+      list.appendChild(emptyServicesState());
       return;
     }
     services.forEach(function (svc) {
@@ -360,6 +491,10 @@
     return (s || "").split(",").map(function (v) { return v.trim(); }).filter(Boolean);
   }
 
+  function splitLines(s) {
+    return (s || "").split("\n").map(function (v) { return v.trim(); }).filter(Boolean);
+  }
+
   function copyText(text, btn) {
     var done = function () {
       var orig = btn.textContent;
@@ -377,6 +512,26 @@
   // once here instead of in panel.html, consistent with how pins/passes
   // rows get their button text from STR rather than the template.
   function initSettingsChrome() {
+    document.getElementById("settings-general-h").textContent = STR.genHeading;
+    document.getElementById("gen-lang-label").textContent = STR.genLangLabel;
+    document.getElementById("gen-admin-public-url-label").textContent = STR.genAdminPublicUrlLabel;
+    document.getElementById("gen-admin-allow-cidrs-label").textContent = STR.genAdminAllowCidrsLabel;
+    document.getElementById("gen-on-change-label").textContent = STR.genOnChangeLabel;
+    document.getElementById("gen-pass-ttl-label").textContent = STR.genPassTtlLabel;
+    document.getElementById("gen-advanced-summary").textContent = STR.genAdvancedSummary;
+    document.getElementById("gen-admin-token-label").textContent = STR.genAdminTokenLabel;
+    document.getElementById("gen-admin-token-set-btn").textContent = STR.genAdminTokenSet;
+    document.getElementById("gen-admin-token-clear-btn").textContent = STR.genAdminTokenClear;
+    document.getElementById("gen-admin-trusted-proxies-label").textContent = STR.genAdminTrustedProxiesLabel;
+    document.getElementById("gen-admin-trusted-header-label").textContent = STR.genAdminTrustedHeaderLabel;
+    document.getElementById("gen-public-trusted-proxies-label").textContent = STR.genPublicTrustedProxiesLabel;
+    document.getElementById("gen-public-cookie-secure-label").textContent = STR.genPublicCookieSecureLabel;
+    document.getElementById("gen-fixed-note").textContent = STR.genFixedNote;
+    document.getElementById("general-save-btn").textContent = STR.genSave;
+    [].forEach.call(document.querySelectorAll("#general-form .badge.base"), function (b) {
+      b.textContent = STR.genLocked;
+    });
+
     document.getElementById("settings-services-h").textContent = STR.svcHeading;
     document.getElementById("service-add-btn").textContent = STR.svcAdd;
     document.getElementById("settings-durations-h").textContent = STR.durHeading;
@@ -484,7 +639,7 @@
     list.setAttribute("aria-busy", "false");
     list.innerHTML = "";
     if (!services.length) {
-      list.appendChild(el("div", { class: "empty", text: STR.noServices }));
+      list.appendChild(emptyServicesState());
       return;
     }
     services.forEach(function (svc) {
@@ -624,6 +779,207 @@
     });
   }
 
+  // ---- General settings (GET/PUT /api/config/general): lang, admin
+  // public URL, allowed admin CIDRs, webhook, pass TTL, plus an
+  // <details> "advanced" group for the admin token (set/remove, never
+  // shown) and the trusted-proxy/cookie knobs. originalGeneral holds the
+  // last value loaded from the server so the PUT only carries fields the
+  // admin actually changed (the API treats an absent field as "leave
+  // alone", see internal/admin/panel.go) and never a locked one.
+  var generalForm = document.getElementById("general-form");
+  var generalFormError = document.getElementById("general-form-error");
+  var originalGeneral = null;
+  var generalLocked = {};
+
+  // admin_trusted_proxies and admin_trusted_header are read-only here on
+  // purpose (security decision, 2026-10-26): the backend strips them from
+  // the PUT body, so the panel only ever displays whatever value is
+  // already configured (see renderGeneral below) instead of pretending
+  // they are editable.
+  var GENERAL_FIELD_IDS = {
+    lang: "gen-lang",
+    admin_public_url: "gen-admin-public-url",
+    admin_allow_cidrs: "gen-admin-allow-cidrs",
+    public_trusted_proxies: "gen-public-trusted-proxies",
+    public_cookie_secure: "gen-public-cookie-secure",
+    pass_ttl: "gen-pass-ttl",
+    on_change: "gen-on-change"
+  };
+
+  function clearGeneralErrors() {
+    generalFormError.hidden = true;
+    Object.keys(GENERAL_FIELD_IDS).forEach(function (field) {
+      var fe = document.getElementById(GENERAL_FIELD_IDS[field] + "-error");
+      if (fe) { fe.hidden = true; fe.textContent = ""; }
+    });
+    document.getElementById("gen-admin-token-error").hidden = true;
+  }
+
+  function showGeneralErrors(err) {
+    clearGeneralErrors();
+    if (err && err.body && err.body.error === "would lock you out") {
+      generalFormError.textContent = STR.genLockoutError;
+      generalFormError.hidden = false;
+      return;
+    }
+    if (err && err.body && err.body.errors) {
+      var any = false;
+      Object.keys(err.body.errors).forEach(function (field) {
+        var inputId = GENERAL_FIELD_IDS[field];
+        var fe = inputId ? document.getElementById(inputId + "-error") : null;
+        if (fe) { fe.textContent = err.body.errors[field]; fe.hidden = false; any = true; }
+      });
+      if (any) return;
+    }
+    generalFormError.textContent = formError(err);
+    generalFormError.hidden = false;
+  }
+
+  function setGeneralFieldLocked(field, inputEl) {
+    var locked = !!generalLocked[field];
+    inputEl.disabled = locked;
+    var badge = document.getElementById(GENERAL_FIELD_IDS[field] + "-badge");
+    if (badge) badge.hidden = !locked;
+  }
+
+  function renderAdminTokenStatus(tokenSet) {
+    var statusEl = document.getElementById("gen-admin-token-status");
+    statusEl.textContent = tokenSet ? STR.genAdminTokenConfigured : STR.genAdminTokenNotConfigured;
+    var tokenLocked = !!generalLocked.admin_token;
+    document.getElementById("gen-admin-token").disabled = tokenLocked;
+    document.getElementById("gen-admin-token-set-btn").disabled = tokenLocked;
+    document.getElementById("gen-admin-token-clear-btn").disabled = tokenLocked || !tokenSet;
+    var badge = document.getElementById("gen-admin-token-badge");
+    if (badge) badge.hidden = !tokenLocked;
+    var logoutBtnEl = document.getElementById("gen-admin-token-logout-btn");
+    if (logoutBtnEl) logoutBtnEl.hidden = !tokenSet;
+  }
+
+  function renderGeneral(general) {
+    originalGeneral = general || {};
+    generalLocked = {};
+    (originalGeneral.locked || []).forEach(function (f) { generalLocked[f] = true; });
+
+    var langEl = document.getElementById("gen-lang");
+    langEl.value = originalGeneral.lang === "en" ? "en" : "es";
+    setGeneralFieldLocked("lang", langEl);
+
+    var urlEl = document.getElementById("gen-admin-public-url");
+    urlEl.value = originalGeneral.admin_public_url || "";
+    setGeneralFieldLocked("admin_public_url", urlEl);
+
+    var cidrsEl = document.getElementById("gen-admin-allow-cidrs");
+    cidrsEl.value = (originalGeneral.admin_allow_cidrs || []).join("\n");
+    setGeneralFieldLocked("admin_allow_cidrs", cidrsEl);
+
+    var onChangeEl = document.getElementById("gen-on-change");
+    onChangeEl.value = originalGeneral.on_change || "";
+    setGeneralFieldLocked("on_change", onChangeEl);
+
+    var ttlEl = document.getElementById("gen-pass-ttl");
+    ttlEl.value = originalGeneral.pass_ttl || "";
+    setGeneralFieldLocked("pass_ttl", ttlEl);
+
+    var adminProxies = originalGeneral.admin_trusted_proxies || [];
+    document.getElementById("gen-admin-trusted-proxies-field").hidden = adminProxies.length === 0;
+    document.getElementById("gen-admin-trusted-proxies-value").textContent = adminProxies.join("\n");
+
+    var adminHeader = originalGeneral.admin_trusted_header || "";
+    document.getElementById("gen-admin-trusted-header-field").hidden = !adminHeader;
+    document.getElementById("gen-admin-trusted-header-value").textContent = adminHeader;
+
+    var publicProxiesEl = document.getElementById("gen-public-trusted-proxies");
+    publicProxiesEl.value = (originalGeneral.public_trusted_proxies || []).join("\n");
+    setGeneralFieldLocked("public_trusted_proxies", publicProxiesEl);
+
+    var cookieEl = document.getElementById("gen-public-cookie-secure");
+    cookieEl.checked = !!originalGeneral.public_cookie_secure;
+    setGeneralFieldLocked("public_cookie_secure", cookieEl);
+
+    document.getElementById("gen-admin-token").value = "";
+    renderAdminTokenStatus(!!originalGeneral.admin_token_set);
+  }
+
+  generalForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    clearGeneralErrors();
+    if (!originalGeneral) return;
+
+    var body = {};
+    function maybeSet(field, val) {
+      if (generalLocked[field]) return;
+      if (JSON.stringify(originalGeneral[field] || null) !== JSON.stringify(val || null)) body[field] = val;
+    }
+    maybeSet("lang", document.getElementById("gen-lang").value);
+    maybeSet("admin_public_url", document.getElementById("gen-admin-public-url").value.trim());
+    maybeSet("admin_allow_cidrs", splitLines(document.getElementById("gen-admin-allow-cidrs").value));
+    maybeSet("on_change", document.getElementById("gen-on-change").value.trim());
+    maybeSet("pass_ttl", document.getElementById("gen-pass-ttl").value.trim());
+    maybeSet("public_trusted_proxies", splitLines(document.getElementById("gen-public-trusted-proxies").value));
+    maybeSet("public_cookie_secure", document.getElementById("gen-public-cookie-secure").checked);
+
+    if (!Object.keys(body).length) { toast(STR.genNothingChanged); return; }
+
+    var langChanged = "lang" in body;
+    var btn = document.getElementById("general-save-btn");
+    btn.disabled = true;
+    api("/api/config/general", { method: "PUT", body: body })
+      .then(function () {
+        toast(STR.genSaved);
+        if (langChanged) { location.reload(); return; }
+        loadSettings();
+      })
+      .catch(function (e) { showGeneralErrors(e); })
+      .finally(function () { btn.disabled = false; });
+  });
+
+  document.getElementById("gen-admin-token-set-btn").addEventListener("click", function () {
+    clearGeneralErrors();
+    var input = document.getElementById("gen-admin-token");
+    var value = input.value.trim();
+    var errEl = document.getElementById("gen-admin-token-error");
+    if (!value) { errEl.textContent = STR.genAdminTokenEmpty; errEl.hidden = false; return; }
+    var btn = this;
+    btn.disabled = true;
+    api("/api/config/general", { method: "PUT", body: { admin_token: value } })
+      .then(function () {
+        // Store it BEFORE the next api() call (loadSettings): once set
+        // server-side, admin.token != "" means every /api/* needs the
+        // bearer, including the panel's own GET /api/config — without
+        // this the panel would lock itself out right after setting it.
+        setAdminToken(value);
+        toast(STR.genAdminTokenSetOk);
+        input.value = "";
+        loadSettings();
+      })
+      .catch(function (e) { errEl.textContent = formError(e); errEl.hidden = false; })
+      .finally(function () { btn.disabled = false; });
+  });
+
+  document.getElementById("gen-admin-token-clear-btn").addEventListener("click", function () {
+    clearGeneralErrors();
+    var btn = this;
+    btn.disabled = true;
+    api("/api/config/general", { method: "PUT", body: { admin_token: "" } })
+      .then(function () {
+        setAdminToken("");
+        toast(STR.genAdminTokenClearedOk);
+        document.getElementById("gen-admin-token").value = "";
+        loadSettings();
+      })
+      .catch(function (e) { document.getElementById("gen-admin-token-error").textContent = formError(e); document.getElementById("gen-admin-token-error").hidden = false; })
+      .finally(function () { btn.disabled = false; });
+  });
+
+  var logoutBtn = document.getElementById("gen-admin-token-logout-btn");
+  if (logoutBtn) {
+    logoutBtn.textContent = STR.logoutBtn;
+    logoutBtn.addEventListener("click", function () {
+      setAdminToken("");
+      location.reload();
+    });
+  }
+
   document.getElementById("reload-btn").addEventListener("click", function () {
     var btn = this;
     var warnEl = document.getElementById("reload-warnings");
@@ -649,6 +1005,7 @@
     if (!settingsChromeReady) { initSettingsChrome(); settingsChromeReady = true; }
     return api("/api/config").then(function (cfg) {
       durationsInput.value = (cfg.durations || []).join(", ");
+      renderGeneral(cfg.general || {});
       renderSettingsServices(cfg.services || []);
       renderSettingsKeys(cfg.api_keys || []);
     }).catch(function (e) { toast(formError(e), true); });
@@ -683,7 +1040,17 @@
     });
   });
 
-  showTab((location.hash || "").slice(1));
+  // Initial tab: an explicit #hash wins; otherwise land on Settings when
+  // there are no services yet, since Services would just show the empty
+  // state's "add the first one" CTA with nothing else to do there.
+  var initialHash = (location.hash || "").slice(1);
+  if (initialHash) {
+    showTab(initialHash);
+  } else {
+    api("/api/services").then(function (services) {
+      showTab(services.length ? "services" : "settings");
+    }).catch(function () { showTab("services"); });
+  }
 
   loadAll();
   setInterval(loadAll, 5000);

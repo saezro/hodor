@@ -112,6 +112,112 @@ be silently blocked by the browser. panel.js reads the island by id.
       <p class="section-hint">{{.Strings.HintSettings}}</p>
 
       <div class="settings-block">
+        <h3 id="settings-general-h"></h3>
+        <form id="general-form">
+          <div class="field">
+            <div class="field-label-row">
+              <label for="gen-lang" id="gen-lang-label"></label>
+              <span class="badge base" id="gen-lang-badge" hidden></span>
+            </div>
+            <select id="gen-lang">
+              <option value="es">es</option>
+              <option value="en">en</option>
+            </select>
+            <p class="field-error" id="gen-lang-error" role="alert" hidden></p>
+          </div>
+          <div class="field">
+            <div class="field-label-row">
+              <label for="gen-admin-public-url" id="gen-admin-public-url-label"></label>
+              <span class="badge base" id="gen-admin-public-url-badge" hidden></span>
+            </div>
+            <input id="gen-admin-public-url" type="text" autocomplete="off" placeholder="https://hodor.example.com">
+            <p class="field-error" id="gen-admin-public-url-error" role="alert" hidden></p>
+          </div>
+          <div class="field">
+            <div class="field-label-row">
+              <label for="gen-admin-allow-cidrs" id="gen-admin-allow-cidrs-label"></label>
+              <span class="badge base" id="gen-admin-allow-cidrs-badge" hidden></span>
+            </div>
+            <textarea id="gen-admin-allow-cidrs" rows="3" placeholder="192.168.1.0/24"></textarea>
+            <p class="field-error" id="gen-admin-allow-cidrs-error" role="alert" hidden></p>
+          </div>
+          <div class="field">
+            <div class="field-label-row">
+              <label for="gen-on-change" id="gen-on-change-label"></label>
+              <span class="badge base" id="gen-on-change-badge" hidden></span>
+            </div>
+            <input id="gen-on-change" type="text" autocomplete="off" placeholder="https://example.com/hook">
+            <p class="field-error" id="gen-on-change-error" role="alert" hidden></p>
+          </div>
+          <div class="field">
+            <div class="field-label-row">
+              <label for="gen-pass-ttl" id="gen-pass-ttl-label"></label>
+              <span class="badge base" id="gen-pass-ttl-badge" hidden></span>
+            </div>
+            <input id="gen-pass-ttl" type="text" autocomplete="off" placeholder="720h">
+            <p class="field-error" id="gen-pass-ttl-error" role="alert" hidden></p>
+          </div>
+
+          <details id="general-advanced">
+            <summary id="gen-advanced-summary"></summary>
+
+            <div class="field">
+              <div class="field-label-row">
+                <label for="gen-admin-token" id="gen-admin-token-label"></label>
+                <span class="badge base" id="gen-admin-token-badge" hidden></span>
+                <span class="token-status" id="gen-admin-token-status"></span>
+              </div>
+              <div class="token-row">
+                <input id="gen-admin-token" type="password" autocomplete="off">
+                <button type="button" id="gen-admin-token-set-btn"></button>
+                <button type="button" class="danger" id="gen-admin-token-clear-btn"></button>
+                <button type="button" id="gen-admin-token-logout-btn" hidden></button>
+              </div>
+              <p class="field-error" id="gen-admin-token-error" role="alert" hidden></p>
+            </div>
+
+            <div class="field" id="gen-admin-trusted-proxies-field" hidden>
+              <div class="field-label-row">
+                <label id="gen-admin-trusted-proxies-label"></label>
+                <span class="badge base" id="gen-admin-trusted-proxies-badge"></span>
+              </div>
+              <p class="readonly-value" id="gen-admin-trusted-proxies-value"></p>
+            </div>
+
+            <div class="field" id="gen-admin-trusted-header-field" hidden>
+              <div class="field-label-row">
+                <label id="gen-admin-trusted-header-label"></label>
+                <span class="badge base" id="gen-admin-trusted-header-badge"></span>
+              </div>
+              <p class="readonly-value" id="gen-admin-trusted-header-value"></p>
+            </div>
+
+            <div class="field">
+              <div class="field-label-row">
+                <label for="gen-public-trusted-proxies" id="gen-public-trusted-proxies-label"></label>
+                <span class="badge base" id="gen-public-trusted-proxies-badge" hidden></span>
+              </div>
+              <textarea id="gen-public-trusted-proxies" rows="3"></textarea>
+              <p class="field-error" id="gen-public-trusted-proxies-error" role="alert" hidden></p>
+            </div>
+
+            <label class="checkbox-field">
+              <input id="gen-public-cookie-secure" type="checkbox">
+              <span id="gen-public-cookie-secure-label"></span>
+              <span class="badge base" id="gen-public-cookie-secure-badge" hidden></span>
+            </label>
+            <p class="field-error" id="gen-public-cookie-secure-error" role="alert" hidden></p>
+          </details>
+
+          <p class="section-note" id="gen-fixed-note"></p>
+          <p class="field-error" id="general-form-error" role="alert" hidden></p>
+          <div class="dialog-actions">
+            <button class="primary" type="submit" id="general-save-btn"></button>
+          </div>
+        </form>
+      </div>
+
+      <div class="settings-block">
         <div class="settings-block-head">
           <h3 id="settings-services-h"></h3>
           <button class="primary" type="button" id="service-add-btn"></button>
@@ -195,6 +301,21 @@ be silently blocked by the browser. panel.js reads the island by id.
       <div class="dialog-actions">
         <button type="button" id="service-cancel-btn"></button>
         <button type="submit" class="primary" id="service-save-btn"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="login-dialog" class="hodor-dialog">
+    <form id="login-form">
+      <h3 id="login-dialog-title"></h3>
+      <p id="login-dialog-desc"></p>
+      <div class="field">
+        <label for="login-token" id="login-token-label"></label>
+        <input id="login-token" type="password" autocomplete="current-password" autofocus>
+      </div>
+      <p class="field-error" id="login-form-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button type="submit" class="primary" id="login-submit-btn"></button>
       </div>
     </form>
   </dialog>
