@@ -58,13 +58,13 @@ docker run -d --name hodor \
   ghcr.io/saezro/hodor
 ```
 
-No config file needed. Open `http://<ip-lan>:8081` → pestaña **Configuración/Settings** → añade servicios. hodor starts closed by default and stays that way until someone on the LAN opens something.
+No config file needed. Open `http://<ip-lan>:8081` → **Settings** tab → add services (the UI is available in English and Spanish, per the `lang` setting). hodor starts closed by default and stays that way until someone on the LAN opens something.
 
 First access asks for the setup token: `docker logs hodor | grep 'setup token'`. It's replaced once you set `admin_token`.
 
 Point your Cloudflare Tunnel (or Traefik/Caddy/nginx) at hodor's public listener (`8080`), keep `8081` on the LAN/VPN only, and you're closed by default. See [`examples/`](examples/) for ready-to-adapt compose files.
 
-### Avanzado (opcional): `hodor.yaml`
+### Advanced (optional): `hodor.yaml`
 
 Everything above also works with a hand-written base config for anything you'd rather pin outside the panel (listen addresses, the secret, services pre-provisioned at deploy time...). Startup-time env vars:
 
@@ -202,9 +202,10 @@ If you need per-user identity and audit logs, pair hodor with Cloudflare Access 
 
 ## Screenshots
 
-<!-- TODO: capture once the admin panel UI lands — see internal/web -->
-<!-- ![admin panel](docs/assets/screenshot-panel.png) -->
-<!-- ![closed page](docs/assets/screenshot-closed.png) -->
+| Admin panel | Closed page | TV pairing |
+|---|---|---|
+| ![Admin panel with services, switches and durations](docs/assets/screenshot-panel.png) | ![Closed page shown to visitors when a service is shut](docs/assets/screenshot-closed.png) | ![TV pairing screen showing a 6-digit PIN](docs/assets/screenshot-tv.png) |
+| Open/close services and manage passes | What visitors see while closed | PIN pairing for keyboard-less devices |
 
 ## Security
 
