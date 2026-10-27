@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Admin panel single sign-on: `admin.auth_header` accepts a user already
+  authenticated by a trusted reverse proxy (Authelia, Authentik...) as an
+  alternative to `admin.token`, with `admin.allowed_users`/
+  `admin.allowed_groups` restricting who's let in. Requires
+  `admin.trusted_proxies`; not editable from the panel.
 - `proxy` mode: reverse-proxies to a service's `upstream` (WebSocket upgrade
   and SSE flush-through supported), stripping hodor cookies before
   forwarding.

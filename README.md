@@ -108,6 +108,38 @@ Ports, the secret and `state_file`/`config_overlay`'s location are not editable 
 
 Panel edits aren't written back into `hodor.yaml`: they live in a separate `config_overlay` file (default `managed.yaml` next to `state_file`), merged on top of the base config at every request. `hodor.yaml` stays hand-owned and is never rewritten. `listen`, `secret_file` and `state_file` only ever come from the base file and are not hot-reloadable; everything else picks up changes immediately via a panel save, `SIGHUP`, or `POST /api/config/reload`.
 
+### Single sign-on (Authelia / Authentik)
+
+The admin panel can accept a user already authenticated by a reverse
+proxy's SSO forward-auth (Authelia, Authentik...) as an alternative to
+`admin.token`, via `admin.auth_header`:
+
+```yaml
+admin:
+  trusted_proxies: [10.0.0.5/32] # the proxy's exact IP, see warning below
+  trusted_header: X-Forwarded-For
+  auth_header: Remote-User # set by the proxy after it authenticates the request
+  auth_groups_header: Remote-Groups # default if auth_header is set; comma-separated
+  allowed_users: [cas]
+  allowed_groups: [admins]
+```
+
+`allowed_users`/`allowed_groups` are both optional; leaving both empty
+allows any user the proxy presents. User matching is an exact string
+match against `allowed_users`; group matching is an exact match of any
+one of the comma-separated values in `auth_groups_header` against
+`allowed_groups`. Mutating requests (`POST`/`PUT`/`DELETE`) authenticated
+this way still require the panel's `X-CSRF-Token`, same as any other
+cookie-based session.
+
+**Security warning**: `trusted_proxies` must be the proxy's exact IP
+(or a `/32`/`/128`), never a wide network — anything inside it can set
+`auth_header` and impersonate any user. The proxy itself must strip or
+overwrite any `Remote-User`/`Remote-Groups` (or whatever headers you
+configure) coming from the client before forwarding, or a client could
+set them directly. `admin.token` keeps working unconditionally once SSO
+is enabled, so the CLI and `/api/v1` scoped keys are unaffected.
+
 ### Per-path access rules
 
 By default a service is all-or-nothing: with a valid pass (or while open) every path reaches the upstream, same as always. `default_access` and `paths` narrow that down per service, in both `proxy` and `forwardAuth` mode:

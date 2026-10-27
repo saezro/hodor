@@ -34,7 +34,9 @@ type Overlay struct {
 // they are security-sensitive (which addresses are trusted to set
 // admin-facing forwarded headers) and are only ever configurable via
 // hodor.yaml or the HODOR_ADMIN_TRUSTED_PROXIES/HODOR_ADMIN_TRUSTED_HEADER
-// env vars, never the panel.
+// env vars, never the panel. The same applies to admin.auth_header,
+// admin.auth_groups_header, admin.allowed_users and
+// admin.allowed_groups (SSO login): hodor.yaml only, see mergeGeneral.
 type General struct {
 	Lang                 *string  `yaml:"lang,omitempty"`
 	AdminPublicURL       *string  `yaml:"admin_public_url,omitempty"`
@@ -201,10 +203,12 @@ func MergeOverlay(base, raw *Config, ov *Overlay) *Config {
 // set it either. Env overrides (HODOR_ADMIN_ALLOW_CIDRS et al) are
 // applied later still, in Validate, so they win over both.
 //
-// admin_trusted_proxies/admin_trusted_header are intentionally absent:
-// they are not panel-editable (see General's doc comment), so they
-// always come straight from raw (hodor.yaml or its env override,
-// applied later by Validate), never the overlay.
+// admin_trusted_proxies/admin_trusted_header - and the SSO fields
+// admin_auth_header/admin_auth_groups_header/admin_allowed_users/
+// admin_allowed_groups - are intentionally absent: they are not
+// panel-editable (see General's doc comment), so they always come
+// straight from raw (hodor.yaml or its env override, applied later by
+// Validate), never the overlay.
 func mergeGeneral(raw *Config, ov *Overlay, merged *Config) {
 	g := ov.General
 
@@ -230,6 +234,11 @@ func mergeGeneral(raw *Config, ov *Overlay, merged *Config) {
 
 	merged.Admin.TrustedProxies = append([]string(nil), raw.Admin.TrustedProxies...)
 	merged.Admin.TrustedHeader = raw.Admin.TrustedHeader
+
+	merged.Admin.AuthHeader = raw.Admin.AuthHeader
+	merged.Admin.AuthGroupsHeader = raw.Admin.AuthGroupsHeader
+	merged.Admin.AllowedUsers = append([]string(nil), raw.Admin.AllowedUsers...)
+	merged.Admin.AllowedGroups = append([]string(nil), raw.Admin.AllowedGroups...)
 
 	merged.Public.TrustedProxies = append([]string(nil), raw.Public.TrustedProxies...)
 	if len(merged.Public.TrustedProxies) == 0 && len(g.PublicTrustedProxies) > 0 {

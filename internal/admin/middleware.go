@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"net"
 	"net/http"
 	"strings"
 
@@ -40,17 +41,19 @@ func (s *Server) cidrCheck(next http.Handler) http.Handler {
 //   - GET /, GET /static/* and GET /healthz need no further check (CIDR
 //     already applied).
 //   - /api/* (except /api/v1/*, which has its own auth in apiV1Guard)
-//     and /metrics always require the effective bearer token
+//     and /metrics require either the effective bearer token
 //     (admin.token, or the in-memory setup token while none is
-//     configured - see Server.effectiveToken/setupToken): there is no
-//     unauthenticated mode.
+//     configured - see Server.effectiveToken/setupToken) or, when
+//     admin.auth_header is configured, a trusted reverse proxy's SSO
+//     header identifying an allow-listed user (see headerUser): there
+//     is no unauthenticated mode.
 //   - mutating /api/* requests (POST/PUT/DELETE) additionally require
 //     the panel CSRF token in X-CSRF-Token, unless a valid bearer token
 //     was presented (that covers the CLI and other machine clients).
-//     In practice this is now dead weight for the panel/CLI path since
-//     bearerOK is already required above, but it's kept as-is (also
-//     relevant to any future caller that gets a free pass on the
-//     bearer check).
+//     Header-based (SSO) auth does NOT get this free pass: it relies on
+//     the proxy's own session cookie, which is exactly the kind of
+//     ambient credential CSRF protects against, so those mutations
+//     still need X-CSRF-Token.
 func (s *Server) csrfAndAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/v1/") {
@@ -74,7 +77,18 @@ func (s *Server) csrfAndAuth(next http.Handler) http.Handler {
 			}
 		}
 
+		headerOK := false
 		if isAPI && !bearerOK {
+			user, present, allowed := s.headerUser(r)
+			if present && !allowed {
+				s.log.Warn("admin: rejected SSO header user outside allowlist", "user", user)
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			headerOK = present && allowed
+		}
+
+		if isAPI && !bearerOK && !headerOK {
 			if s.cfg().Admin.Token == "" {
 				// No admin.token configured yet: the setup token is
 				// the only valid bearer (see Server.effectiveToken).
@@ -95,6 +109,67 @@ func (s *Server) csrfAndAuth(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// headerUser reports whether r carries a usable SSO identity via
+// admin.auth_header: present is true only when auth_header is
+// configured, the DIRECT peer (r.RemoteAddr - deliberately not the
+// resolved auth.ClientIP, which would itself trust a chain of forwarded
+// headers one of which could be this very header's proxy) is in
+// admin.trusted_proxies, and the header's value is non-empty after
+// trimming. allowed is then whichever of that user's identity/groups
+// passes the configured allowlist (see headerAllowed); it is
+// meaningless when present is false. user is returned for logging even
+// when not allowed.
+func (s *Server) headerUser(r *http.Request) (user string, present, allowed bool) {
+	cfg := s.cfg()
+	if cfg.Admin.AuthHeader == "" {
+		return "", false, false
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	peer := net.ParseIP(host)
+	if peer == nil || !auth.IPAllowed(cfg.Admin.ParsedProxies, peer) {
+		return "", false, false
+	}
+	user = strings.TrimSpace(r.Header.Get(cfg.Admin.AuthHeader))
+	if user == "" {
+		return "", false, false
+	}
+	return user, true, headerAllowed(cfg.Admin.AllowedUsers, cfg.Admin.AllowedGroups, user, r.Header.Get(cfg.Admin.AuthGroupsHeader))
+}
+
+// headerAllowed reports whether user (or one of the comma-separated
+// groups in groupsHeader) passes the allow_users/allow_groups
+// allowlist: both empty means any authenticated user passes; otherwise
+// user must exactly match an entry in allowedUsers, or one of its
+// groups must exactly match an entry in allowedGroups.
+func headerAllowed(allowedUsers, allowedGroups []string, user, groupsHeader string) bool {
+	if len(allowedUsers) == 0 && len(allowedGroups) == 0 {
+		return true
+	}
+	for _, u := range allowedUsers {
+		if u == user {
+			return true
+		}
+	}
+	if len(allowedGroups) == 0 {
+		return false
+	}
+	for _, g := range strings.Split(groupsHeader, ",") {
+		g = strings.TrimSpace(g)
+		if g == "" {
+			continue
+		}
+		for _, allowed := range allowedGroups {
+			if allowed == g {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // checkBearer reports whether r carries the effective admin bearer

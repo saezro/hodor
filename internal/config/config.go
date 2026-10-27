@@ -55,6 +55,28 @@ type Admin struct {
 	TrustedProxies []string `yaml:"trusted_proxies"`
 	TrustedHeader  string   `yaml:"trusted_header"`
 
+	// AuthHeader, if set, enables single sign-on through a reverse proxy
+	// (Authelia, Authentik...) sitting in front of the admin listener:
+	// a request carrying this header, from a direct peer listed in
+	// TrustedProxies, authenticates as that header's value instead of
+	// (or alongside) admin.token - see Server.headerUser. Empty (the
+	// default) disables this entirely, matching prior behavior.
+	AuthHeader string `yaml:"auth_header"`
+	// AuthGroupsHeader names the header carrying the user's
+	// comma-separated group memberships, used against AllowedGroups.
+	// Only meaningful when AuthHeader is set; defaults to
+	// "Remote-Groups" (Authelia/Authentik's own default) when left
+	// empty.
+	AuthGroupsHeader string `yaml:"auth_groups_header"`
+	// AllowedUsers/AllowedGroups restrict which SSO identities may use
+	// AuthHeader to reach the admin panel: a request is accepted if its
+	// user is in AllowedUsers (exact match) or any of its groups is in
+	// AllowedGroups (exact match). Both empty means any authenticated
+	// user is allowed. User matching is case-sensitive; so is group
+	// matching - set these to match the proxy's own casing exactly.
+	AllowedUsers  []string `yaml:"allowed_users"`
+	AllowedGroups []string `yaml:"allowed_groups"`
+
 	ParsedCIDRs   []*net.IPNet `yaml:"-"`
 	ParsedProxies []*net.IPNet `yaml:"-"`
 }
@@ -312,6 +334,14 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("admin.trusted_proxies: invalid CIDR %q: %w", s, err)
 		}
 		c.Admin.ParsedProxies = append(c.Admin.ParsedProxies, n)
+	}
+	if c.Admin.AuthHeader != "" {
+		if len(c.Admin.TrustedProxies) == 0 {
+			return fmt.Errorf("admin.auth_header requires admin.trusted_proxies to be set (otherwise any direct client could forge it)")
+		}
+		if c.Admin.AuthGroupsHeader == "" {
+			c.Admin.AuthGroupsHeader = "Remote-Groups"
+		}
 	}
 	for _, s := range c.Public.TrustedProxies {
 		_, n, err := net.ParseCIDR(s)

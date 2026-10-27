@@ -14,6 +14,14 @@ listen: { public: ":8080", admin: ":8081" }
 admin:
   allow_cidrs: [192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, 127.0.0.0/8]
   public_url: https://media.home.example.com
+  # SSO via a reverse proxy (Authelia, Authentik...) in front of the admin
+  # listener, as an alternative to admin.token: requires trusted_proxies
+  # (the proxy's direct IP) and auth_header (the identity header it sets);
+  # allowed_users/allowed_groups optionally restrict which SSO identities
+  # may reach the panel (both empty = any authenticated user).
+  # trusted_proxies: [127.0.0.1/32]
+  # auth_header: Remote-User
+  # allowed_users: [alice]
 durations: [1h, 3h, 6h, 24h]
 services:
   - name: jellyfin

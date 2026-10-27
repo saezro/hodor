@@ -182,6 +182,19 @@ func TestValidate_Table(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:    "auth_header without trusted_proxies",
+			mutate:  func(c *Config) { c.Admin.AuthHeader = "Remote-User" },
+			wantErr: true,
+		},
+		{
+			name: "auth_header with trusted_proxies is valid",
+			mutate: func(c *Config) {
+				c.Admin.AuthHeader = "Remote-User"
+				c.Admin.TrustedProxies = []string{"10.0.0.1/32"}
+			},
+			wantErr: false,
+		},
+		{
 			name:    "invalid duration",
 			mutate:  func(c *Config) { c.Durations = []string{"not-a-duration"} },
 			wantErr: true,
@@ -418,6 +431,33 @@ func TestLockedGeneralFields_AdminAllowCIDRsEnvLocksEvenWhenBaseUnset(t *testing
 	}
 	if !found {
 		t.Errorf("LockedGeneralFields() = %+v, want admin_allow_cidrs locked due to env override", locked)
+	}
+}
+
+// TestValidate_AuthGroupsHeaderDefault checks that auth_groups_header
+// defaults to "Remote-Groups" (Authelia/Authentik's own default) when
+// auth_header is set but auth_groups_header isn't, and that an
+// explicit value is left untouched.
+func TestValidate_AuthGroupsHeaderDefault(t *testing.T) {
+	c := baseValidConfig()
+	c.Admin.AuthHeader = "Remote-User"
+	c.Admin.TrustedProxies = []string{"10.0.0.1/32"}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if c.Admin.AuthGroupsHeader != "Remote-Groups" {
+		t.Errorf("AuthGroupsHeader default = %q, want %q", c.Admin.AuthGroupsHeader, "Remote-Groups")
+	}
+
+	c2 := baseValidConfig()
+	c2.Admin.AuthHeader = "Remote-User"
+	c2.Admin.TrustedProxies = []string{"10.0.0.1/32"}
+	c2.Admin.AuthGroupsHeader = "X-Groups"
+	if err := c2.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if c2.Admin.AuthGroupsHeader != "X-Groups" {
+		t.Errorf("AuthGroupsHeader explicit = %q, want %q", c2.Admin.AuthGroupsHeader, "X-Groups")
 	}
 }
 
