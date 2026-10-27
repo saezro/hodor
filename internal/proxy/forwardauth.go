@@ -3,6 +3,7 @@ package proxy
 import (
 	"net"
 	"net/http"
+	"net/url"
 
 	"github.com/saezro/hodor/internal/auth"
 	"github.com/saezro/hodor/internal/config"
@@ -38,6 +39,13 @@ func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
 	if r.TLS != nil {
 		proto = "https"
 	}
+	// reqPath/reqMethod describe the *original* request the front proxy
+	// is asking about, not this /auth call itself; they only ever come
+	// from X-Forwarded-Uri/X-Forwarded-Method, same trust boundary as
+	// Host/Proto below, since an untrusted caller could otherwise forge
+	// them to pick whichever path rule it likes.
+	reqPath := r.URL.Path
+	reqMethod := r.Method
 
 	if s.remoteTrusted(cfg, r) {
 		if h := r.Header.Get("X-Forwarded-Host"); h != "" {
@@ -46,11 +54,29 @@ func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
 		if p := r.Header.Get("X-Forwarded-Proto"); p != "" {
 			proto = p
 		}
+		if u := r.Header.Get("X-Forwarded-Uri"); u != "" {
+			if parsed, err := url.Parse(u); err == nil && parsed.Path != "" {
+				reqPath = parsed.Path
+			}
+		}
+		if m := r.Header.Get("X-Forwarded-Method"); m != "" {
+			reqMethod = m
+		}
 	}
 
 	svc := s.lookupHost(cfg, host)
 	if svc == nil {
 		http.Error(w, "unknown host", http.StatusNotFound)
+		return
+	}
+
+	access := svc.MatchAccess(reqPath, reqMethod)
+	if access == config.AccessDeny {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if access == config.AccessPublic {
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 

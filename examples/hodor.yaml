@@ -29,6 +29,26 @@ services:
     mode: proxy
     upstream: http://navidrome:4533
     group: media
+  - name: wiki
+    title: Wiki
+    hosts: [wiki.example.com]
+    mode: proxy
+    upstream: http://wiki:8080
+    # Per-path access rules (optional): evaluated in order, first match
+    # wins; anything not matched falls back to default_access (and that,
+    # if unset, behaves exactly like a service with no paths at all -
+    # i.e. gated). See README.md "Per-path access rules".
+    default_access: deny
+    paths:
+      - path: /healthz           # exact match
+        access: public           # always reachable, even closed
+      - prefix: /assets/          # prefix match
+        methods: [GET, HEAD]
+        access: public
+      - path: /
+        access: gated             # today's behavior: open, or valid pass
+      - path: /admin
+        access: deny              # always 404, even with a pass
 
 # Scoped API keys for the versioned /api/v1 endpoints (embeddable
 # button, etc.). Generate with `hodor key new --name foo --services

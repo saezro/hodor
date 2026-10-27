@@ -27,7 +27,12 @@ func (s *Server) handleDefault(w http.ResponseWriter, r *http.Request) {
 		s.renderClosedFor(cfg, w, svc)
 		return
 	case config.ModeProxy:
-		if !s.allowed(r, svc) {
+		access := svc.MatchAccess(r.URL.Path, r.Method)
+		if access == config.AccessDeny {
+			http.NotFound(w, r)
+			return
+		}
+		if access != config.AccessPublic && !s.allowed(r, svc) {
 			s.renderClosedFor(cfg, w, svc)
 			return
 		}

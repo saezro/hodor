@@ -108,6 +108,35 @@ Ports, the secret and `state_file`/`config_overlay`'s location are not editable 
 
 Panel edits aren't written back into `hodor.yaml`: they live in a separate `config_overlay` file (default `managed.yaml` next to `state_file`), merged on top of the base config at every request. `hodor.yaml` stays hand-owned and is never rewritten. `listen`, `secret_file` and `state_file` only ever come from the base file and are not hot-reloadable; everything else picks up changes immediately via a panel save, `SIGHUP`, or `POST /api/config/reload`.
 
+### Per-path access rules
+
+By default a service is all-or-nothing: with a valid pass (or while open) every path reaches the upstream, same as always. `default_access` and `paths` narrow that down per service, in both `proxy` and `forwardAuth` mode:
+
+```yaml
+services:
+  - name: wiki
+    hosts: [wiki.example.com]
+    mode: proxy
+    upstream: http://wiki:8080
+    default_access: deny   # optional: gated (default, today's behavior) | deny | public
+    paths:                 # optional, evaluated in order - first match wins
+      - path: /healthz      # exact match
+        access: public      # always reachable, even while closed, no pass needed
+      - prefix: /assets/     # prefix match
+        methods: [GET, HEAD] # optional; omitted/empty = any method
+        access: public
+      - path: /
+        access: gated        # open, or a valid device pass, required (today's behavior)
+      - path: /admin
+        access: deny          # always 404, even with a pass or while open
+```
+
+- `gated` is the implicit default for both `default_access` and any `paths` entry's `access`: a service with neither field set behaves exactly as before.
+- `deny` always answers `404`, bypassing open/closed state and any device pass entirely.
+- `public` always lets the request through, open or closed, pass or no pass.
+- Request paths are normalized (`.`/`..` resolved, double slashes collapsed) before matching, so a path like `/vendor/../admin` is evaluated as `/admin`.
+- In `forwardAuth` mode the path/method come from the `X-Forwarded-Uri`/`X-Forwarded-Method` headers your reverse proxy sends to `GET /auth`, honored only from `public.trusted_proxies` — same trust boundary as `X-Forwarded-Host`/`-Proto` above.
+
 ## API keys
 
 For a custom button or dashboard that opens/closes a service without visiting the panel, mint a scoped key:

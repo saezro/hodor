@@ -98,6 +98,16 @@ type Service struct {
 	PassBypassesClosed *bool       `yaml:"pass_bypasses_closed" json:"pass_bypasses_closed,omitempty"`
 	Auth               ServiceAuth `yaml:"auth" json:"auth,omitempty"`
 
+	// DefaultAccess is the Access applied to any request whose path
+	// doesn't match any entry in Paths. Empty means AccessGated, i.e.
+	// exactly today's behavior (open or valid pass required) - see
+	// MatchAccess.
+	DefaultAccess Access `yaml:"default_access,omitempty" json:"default_access,omitempty"`
+	// Paths lists per-path access overrides, evaluated in order: the
+	// first matching rule wins (see MatchAccess). Optional; an empty
+	// list means every request falls through to DefaultAccess.
+	Paths []PathRule `yaml:"paths,omitempty" json:"paths,omitempty"`
+
 	// Closed-page theming.
 	Message     string `yaml:"message" json:"message,omitempty"`
 	AccentColor string `yaml:"accent_color" json:"accent_color,omitempty"`
@@ -397,6 +407,17 @@ func (c *Config) Validate() error {
 		}
 		if s.Title == "" {
 			s.Title = s.Name
+		}
+
+		switch s.DefaultAccess {
+		case "", AccessGated, AccessDeny, AccessPublic:
+		default:
+			return fmt.Errorf("services[%s]: invalid default_access %q (want %q, %q or %q)", s.Name, s.DefaultAccess, AccessGated, AccessDeny, AccessPublic)
+		}
+		for j := range s.Paths {
+			if err := s.Paths[j].validate(); err != nil {
+				return fmt.Errorf("services[%s]: paths[%d]: %w", s.Name, j, err)
+			}
 		}
 	}
 
