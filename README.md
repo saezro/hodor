@@ -47,7 +47,7 @@ hodor sits in front of those services and keeps them **closed by default**. Some
 1. Internet traffic hits your tunnel/proxy, which forwards to hodor.
 2. hodor checks whether the service is open. Closed → closed page (or `401`/redirect for forwardAuth). Open → request goes through.
 3. Someone on the LAN/VPN opens the admin panel and flips the switch for N hours.
-4. A TV or other keyboard-less screen goes to `/tv`, shows a PIN, gets approved once, and keeps a long-lived pass from then on — the service being closed doesn't lock it out.
+4. A TV or other keyboard-less screen goes to `/tv`, shows a PIN, gets approved once, and keeps a long-lived pass from then on — the service being closed doesn't lock it out. If the service is already open/passed when `/tv` is hit, hodor forwards straight to the upstream instead (so an upstream with its own `/tv` page, e.g. some geo/location services, isn't stuck behind an endless re-pairing loop).
 
 ## Quick start
 

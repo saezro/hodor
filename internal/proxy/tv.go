@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/saezro/hodor/internal/auth"
+	"github.com/saezro/hodor/internal/config"
 	"github.com/saezro/hodor/internal/pin"
 	"github.com/saezro/hodor/internal/web"
 )
@@ -48,6 +49,20 @@ func (s *Server) handleTV(w http.ResponseWriter, r *http.Request) {
 	svc := s.lookupHost(cfg, r.Host)
 	if svc == nil {
 		http.NotFound(w, r)
+		return
+	}
+
+	// Some upstreams (e.g. certain geo/location services) have their own
+	// /tv page and redirect their own "/" to it. If the request is
+	// already let through for svc, forward it to that upstream like any
+	// other path instead of handing out a pairing PIN: otherwise the
+	// device never reaches the upstream's /tv, and once it does load
+	// (after approving a PIN) its own JS reload lands back on /tv here,
+	// creating a new PIN forever. Only applies to proxy mode: a
+	// forwardauth service has no upstream for hodor to forward to, so
+	// keep handing out the PIN there regardless of open/pass state.
+	if svc.Mode == config.ModeProxy && s.allowed(r, svc) {
+		s.handleDefault(w, r)
 		return
 	}
 
