@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Admin panel: "Add service" button lives in the Services tab; the
+  Configuration tab is regrouped into General and Advanced cards.
+- Service dialog: every field now has a short help line (en/es), and the
+  pass checkbox label says what it actually does.
+
+### Fixed
+
+- Service dialog opened from the Services tab showed empty labels and
+  buttons until the Configuration tab had been visited.
+- Unticking "devices with a pass get in even while closed" had no effect
+  (the field defaulted to true when omitted); it is now sent explicitly
+  and new services start ticked, matching the config default.
+
 ### Added
 
 - Admin panel single sign-on: `admin.auth_header` accepts a user already

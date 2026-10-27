@@ -170,6 +170,16 @@ main#app {
 
 .section-hint { margin: 0 0 0.75rem; color: var(--color-text-muted); font-size: 0.85rem; }
 
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.section-head .section-hint { margin: 0; }
+
 .list { display: flex; flex-direction: column; gap: 0.6rem; }
 
 .empty {
@@ -298,26 +308,62 @@ button.danger:hover { background: var(--status-closed-bg); }
    <dialog>s used for service/key create-edit and the key-reveal-once
    modal (see panel.html + panel.js). ---- */
 
-.settings-block { margin-bottom: 1.75rem; }
+.settings-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.1rem 1.25rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.settings-card h3 { margin: 0; font-size: 0.95rem; font-weight: 650; }
+.settings-card-desc {
+  margin: 0.3rem 0 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
 .settings-block-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
 }
-.settings-block h3 { margin: 0; font-size: 0.95rem; font-weight: 650; }
+
+/* Deliberately plain, not a card: advanced access/token settings and the
+   config-reload action, kept visually quiet and collapsed by default so
+   they don't compete with the three settings cards above (willy-gusto-cas:
+   "una acción primaria por sección", discreet treatment for rarely-touched
+   admin knobs). */
+.settings-advanced { margin-bottom: 1.25rem; }
+.settings-advanced > summary {
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  padding: 0.5rem 0.1rem;
+  list-style: none;
+}
+.settings-advanced > summary::-webkit-details-marker { display: none; }
+.settings-advanced > summary::before { content: "\25B8"; display: inline-block; margin-right: 0.45rem; transition: transform 150ms ease; }
+.settings-advanced[open] > summary::before { transform: rotate(90deg); }
+.settings-advanced > summary:hover,
+.settings-advanced[open] > summary { color: var(--color-text); }
+@media (prefers-reduced-motion: reduce) {
+  .settings-advanced > summary::before { transition: none; }
+}
+.settings-reload-row { margin-top: 0.5rem; }
 
 .row.settings-row { align-items: flex-start; }
 .row .source-note { color: var(--color-text-muted); font-size: 0.78rem; font-family: var(--font-mono); }
 
-.inline-form { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.durations-input { flex: 1 1 16rem; font-family: var(--font-mono); }
+.durations-input { font-family: var(--font-mono); }
 
 .field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.85rem; }
 .field label { font-size: 0.8rem; color: var(--color-text-muted); font-weight: 600; }
 .field input, .field select, .field textarea { width: 100%; }
 .field textarea { font-family: var(--font-mono); font-size: 0.82rem; resize: vertical; }
+.field-hint { margin: 0; font-size: 0.75rem; line-height: 1.4; color: var(--color-text-muted); font-weight: 400; }
+.checkbox-field + .field-hint { margin: -0.35rem 0 0.85rem 1.6rem; }
 
 .checkbox-field { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.85rem; font-size: 0.88rem; }
 .checkbox-field input { width: auto; min-height: 0; padding: 0; }
@@ -351,18 +397,6 @@ button.danger:hover { background: var(--status-closed-bg); }
 .token-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
 .token-row input { flex: 1 1 10rem; }
 .token-status { font-size: 0.78rem; color: var(--color-text-muted); font-family: var(--font-mono); }
-
-#general-advanced { margin: 0.4rem 0 1rem; }
-#general-advanced summary {
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 650;
-  color: var(--color-text-muted);
-  padding: 0.4rem 0;
-}
-#general-advanced summary:hover { color: var(--color-text); }
-#general-advanced[open] summary { color: var(--color-text); }
-#general-advanced > .field:first-of-type { margin-top: 0.75rem; }
 
 .readonly-value {
   margin: 0;

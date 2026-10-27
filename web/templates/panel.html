@@ -81,7 +81,10 @@ be silently blocked by the browser. panel.js reads the island by id.
 
     <section id="services" class="panel-section" aria-labelledby="services-h">
       <h2 id="services-h" class="sr-only">{{.Strings.TabServices}}</h2>
-      <p class="section-hint">{{.Strings.HintServices}}</p>
+      <div class="section-head">
+        <p class="section-hint">{{.Strings.HintServices}}</p>
+        <button class="primary" type="button" id="services-add-btn"></button>
+      </div>
       <div id="services-list" class="list" aria-busy="true">
         <div class="skeleton-row"></div>
         <div class="skeleton-row"></div>
@@ -116,9 +119,65 @@ be silently blocked by the browser. panel.js reads the island by id.
       <h2 id="settings-h" class="sr-only">{{.Strings.TabSettings}}</h2>
       <p class="section-hint">{{.Strings.HintSettings}}</p>
 
-      <div class="settings-block">
+      <div class="settings-card">
         <h3 id="settings-general-h"></h3>
+        <p class="settings-card-desc" id="settings-general-desc"></p>
         <form id="general-form">
+          <div class="field">
+            <div class="field-label-row">
+              <label for="gen-on-change" id="gen-on-change-label"></label>
+              <span class="badge base" id="gen-on-change-badge" hidden></span>
+            </div>
+            <input id="gen-on-change" type="text" autocomplete="off" placeholder="https://example.com/hook">
+            <p class="field-error" id="gen-on-change-error" role="alert" hidden></p>
+          </div>
+          <div class="field">
+            <div class="field-label-row">
+              <label for="gen-pass-ttl" id="gen-pass-ttl-label"></label>
+              <span class="badge base" id="gen-pass-ttl-badge" hidden></span>
+            </div>
+            <input id="gen-pass-ttl" type="text" autocomplete="off" placeholder="720h">
+            <p class="field-error" id="gen-pass-ttl-error" role="alert" hidden></p>
+          </div>
+          <div class="field">
+            <div class="field-label-row">
+              <label for="gen-durations" id="gen-durations-label"></label>
+            </div>
+            <input id="gen-durations" type="text" autocomplete="off" class="durations-input" placeholder="1h, 3h, 6h, 24h">
+            <p class="field-error" id="gen-durations-error" role="alert" hidden></p>
+          </div>
+
+          <p class="field-error" id="general-form-error" role="alert" hidden></p>
+          <div class="dialog-actions">
+            <button class="primary" type="submit" id="general-save-btn"></button>
+          </div>
+        </form>
+      </div>
+
+      <div class="settings-card">
+        <h3 id="settings-services-h"></h3>
+        <p class="settings-card-desc" id="settings-services-desc"></p>
+        <div id="settings-services-list" class="list" aria-busy="true">
+          <div class="skeleton-row"></div>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-block-head">
+          <h3 id="settings-keys-h"></h3>
+          <button class="primary" type="button" id="key-add-btn"></button>
+        </div>
+        <p class="settings-card-desc" id="settings-keys-desc"></p>
+        <div id="settings-keys-list" class="list" aria-busy="true">
+          <div class="skeleton-row"></div>
+        </div>
+      </div>
+
+      <details class="settings-advanced" id="settings-advanced">
+        <summary id="settings-advanced-h"></summary>
+        <p class="settings-card-desc" id="settings-advanced-desc"></p>
+
+        <form id="advanced-form">
           <div class="field">
             <div class="field-label-row">
               <label for="gen-lang" id="gen-lang-label"></label>
@@ -146,117 +205,66 @@ be silently blocked by the browser. panel.js reads the island by id.
             <textarea id="gen-admin-allow-cidrs" rows="3" placeholder="192.168.1.0/24"></textarea>
             <p class="field-error" id="gen-admin-allow-cidrs-error" role="alert" hidden></p>
           </div>
+
           <div class="field">
             <div class="field-label-row">
-              <label for="gen-on-change" id="gen-on-change-label"></label>
-              <span class="badge base" id="gen-on-change-badge" hidden></span>
+              <label for="gen-admin-token" id="gen-admin-token-label"></label>
+              <span class="badge base" id="gen-admin-token-badge" hidden></span>
+              <span class="token-status" id="gen-admin-token-status"></span>
             </div>
-            <input id="gen-on-change" type="text" autocomplete="off" placeholder="https://example.com/hook">
-            <p class="field-error" id="gen-on-change-error" role="alert" hidden></p>
+            <div class="token-row">
+              <input id="gen-admin-token" type="password" autocomplete="off">
+              <button type="button" id="gen-admin-token-set-btn"></button>
+              <button type="button" class="danger" id="gen-admin-token-clear-btn"></button>
+              <button type="button" id="gen-admin-token-logout-btn" hidden></button>
+            </div>
+            <p class="field-error" id="gen-admin-token-error" role="alert" hidden></p>
           </div>
+
+          <div class="field" id="gen-admin-trusted-proxies-field" hidden>
+            <div class="field-label-row">
+              <label id="gen-admin-trusted-proxies-label"></label>
+              <span class="badge base" id="gen-admin-trusted-proxies-badge"></span>
+            </div>
+            <p class="readonly-value" id="gen-admin-trusted-proxies-value"></p>
+          </div>
+
+          <div class="field" id="gen-admin-trusted-header-field" hidden>
+            <div class="field-label-row">
+              <label id="gen-admin-trusted-header-label"></label>
+              <span class="badge base" id="gen-admin-trusted-header-badge"></span>
+            </div>
+            <p class="readonly-value" id="gen-admin-trusted-header-value"></p>
+          </div>
+
           <div class="field">
             <div class="field-label-row">
-              <label for="gen-pass-ttl" id="gen-pass-ttl-label"></label>
-              <span class="badge base" id="gen-pass-ttl-badge" hidden></span>
+              <label for="gen-public-trusted-proxies" id="gen-public-trusted-proxies-label"></label>
+              <span class="badge base" id="gen-public-trusted-proxies-badge" hidden></span>
             </div>
-            <input id="gen-pass-ttl" type="text" autocomplete="off" placeholder="720h">
-            <p class="field-error" id="gen-pass-ttl-error" role="alert" hidden></p>
+            <textarea id="gen-public-trusted-proxies" rows="3"></textarea>
+            <p class="field-error" id="gen-public-trusted-proxies-error" role="alert" hidden></p>
           </div>
 
-          <details id="general-advanced">
-            <summary id="gen-advanced-summary"></summary>
-
-            <div class="field">
-              <div class="field-label-row">
-                <label for="gen-admin-token" id="gen-admin-token-label"></label>
-                <span class="badge base" id="gen-admin-token-badge" hidden></span>
-                <span class="token-status" id="gen-admin-token-status"></span>
-              </div>
-              <div class="token-row">
-                <input id="gen-admin-token" type="password" autocomplete="off">
-                <button type="button" id="gen-admin-token-set-btn"></button>
-                <button type="button" class="danger" id="gen-admin-token-clear-btn"></button>
-                <button type="button" id="gen-admin-token-logout-btn" hidden></button>
-              </div>
-              <p class="field-error" id="gen-admin-token-error" role="alert" hidden></p>
-            </div>
-
-            <div class="field" id="gen-admin-trusted-proxies-field" hidden>
-              <div class="field-label-row">
-                <label id="gen-admin-trusted-proxies-label"></label>
-                <span class="badge base" id="gen-admin-trusted-proxies-badge"></span>
-              </div>
-              <p class="readonly-value" id="gen-admin-trusted-proxies-value"></p>
-            </div>
-
-            <div class="field" id="gen-admin-trusted-header-field" hidden>
-              <div class="field-label-row">
-                <label id="gen-admin-trusted-header-label"></label>
-                <span class="badge base" id="gen-admin-trusted-header-badge"></span>
-              </div>
-              <p class="readonly-value" id="gen-admin-trusted-header-value"></p>
-            </div>
-
-            <div class="field">
-              <div class="field-label-row">
-                <label for="gen-public-trusted-proxies" id="gen-public-trusted-proxies-label"></label>
-                <span class="badge base" id="gen-public-trusted-proxies-badge" hidden></span>
-              </div>
-              <textarea id="gen-public-trusted-proxies" rows="3"></textarea>
-              <p class="field-error" id="gen-public-trusted-proxies-error" role="alert" hidden></p>
-            </div>
-
-            <label class="checkbox-field">
-              <input id="gen-public-cookie-secure" type="checkbox">
-              <span id="gen-public-cookie-secure-label"></span>
-              <span class="badge base" id="gen-public-cookie-secure-badge" hidden></span>
-            </label>
-            <p class="field-error" id="gen-public-cookie-secure-error" role="alert" hidden></p>
-          </details>
+          <label class="checkbox-field">
+            <input id="gen-public-cookie-secure" type="checkbox">
+            <span id="gen-public-cookie-secure-label"></span>
+            <span class="badge base" id="gen-public-cookie-secure-badge" hidden></span>
+          </label>
+          <p class="field-error" id="gen-public-cookie-secure-error" role="alert" hidden></p>
 
           <p class="section-note" id="gen-fixed-note"></p>
-          <p class="field-error" id="general-form-error" role="alert" hidden></p>
+          <p class="field-error" id="advanced-form-error" role="alert" hidden></p>
           <div class="dialog-actions">
-            <button class="primary" type="submit" id="general-save-btn"></button>
+            <button class="primary" type="submit" id="advanced-save-btn"></button>
           </div>
         </form>
-      </div>
 
-      <div class="settings-block">
-        <div class="settings-block-head">
-          <h3 id="settings-services-h"></h3>
-          <button class="primary" type="button" id="service-add-btn"></button>
-        </div>
-        <div id="settings-services-list" class="list" aria-busy="true">
-          <div class="skeleton-row"></div>
-        </div>
-      </div>
-
-      <div class="settings-block">
-        <h3 id="settings-durations-h"></h3>
-        <form id="durations-form" class="inline-form">
-          <input type="text" id="durations-input" class="durations-input">
-          <button class="primary" type="submit" id="durations-save-btn"></button>
-        </form>
-      </div>
-
-      <div class="settings-block">
-        <div class="settings-block-head">
-          <h3 id="settings-keys-h"></h3>
-          <button class="primary" type="button" id="key-add-btn"></button>
-        </div>
-        <div id="settings-keys-list" class="list" aria-busy="true">
-          <div class="skeleton-row"></div>
-        </div>
-      </div>
-
-      <div class="settings-block">
-        <div class="settings-block-head">
-          <h3 id="settings-reload-h"></h3>
+        <div class="settings-reload-row">
           <button type="button" id="reload-btn"></button>
         </div>
         <ul id="reload-warnings" class="reload-warnings" hidden></ul>
-      </div>
+      </details>
     </section>
   </main>
 
@@ -265,43 +273,52 @@ be silently blocked by the browser. panel.js reads the island by id.
       <h3 id="service-dialog-title"></h3>
       <div class="field">
         <label for="svc-name" id="svc-name-label"></label>
-        <input id="svc-name" type="text" pattern="[a-z0-9-]+" autocomplete="off">
+        <input id="svc-name" type="text" pattern="[a-z0-9-]+" autocomplete="off" aria-describedby="svc-name-hint">
+        <p class="field-hint" id="svc-name-hint"></p>
       </div>
       <div class="field">
         <label for="svc-title" id="svc-title-label"></label>
-        <input id="svc-title" type="text" autocomplete="off">
+        <input id="svc-title" type="text" autocomplete="off" aria-describedby="svc-title-hint">
+        <p class="field-hint" id="svc-title-hint"></p>
       </div>
       <div class="field">
         <label for="svc-hosts" id="svc-hosts-label"></label>
-        <input id="svc-hosts" type="text" autocomplete="off" placeholder="jellyfin.lan, jellyfin.local">
+        <input id="svc-hosts" type="text" autocomplete="off" placeholder="jellyfin.lan, jellyfin.local" aria-describedby="svc-hosts-hint">
+        <p class="field-hint" id="svc-hosts-hint"></p>
       </div>
       <div class="field">
         <label for="svc-mode" id="svc-mode-label"></label>
-        <select id="svc-mode">
+        <select id="svc-mode" aria-describedby="svc-mode-hint">
           <option value="proxy">proxy</option>
           <option value="forwardauth">forwardauth</option>
         </select>
+        <p class="field-hint" id="svc-mode-hint"></p>
       </div>
       <div class="field" id="svc-upstream-field">
         <label for="svc-upstream" id="svc-upstream-label"></label>
-        <input id="svc-upstream" type="text" autocomplete="off" placeholder="http://127.0.0.1:5000">
+        <input id="svc-upstream" type="text" autocomplete="off" placeholder="http://127.0.0.1:5000" aria-describedby="svc-upstream-hint">
+        <p class="field-hint" id="svc-upstream-hint"></p>
       </div>
       <div class="field">
         <label for="svc-group" id="svc-group-label"></label>
-        <input id="svc-group" type="text" autocomplete="off">
+        <input id="svc-group" type="text" autocomplete="off" aria-describedby="svc-group-hint">
+        <p class="field-hint" id="svc-group-hint"></p>
       </div>
       <div class="field">
         <label for="svc-accent" id="svc-accent-label"></label>
-        <input id="svc-accent" type="text" autocomplete="off" placeholder="#C97A2E">
+        <input id="svc-accent" type="text" autocomplete="off" placeholder="#C97A2E" aria-describedby="svc-accent-hint">
+        <p class="field-hint" id="svc-accent-hint"></p>
       </div>
       <div class="field">
         <label for="svc-message" id="svc-message-label"></label>
-        <input id="svc-message" type="text" autocomplete="off">
+        <input id="svc-message" type="text" autocomplete="off" aria-describedby="svc-message-hint">
+        <p class="field-hint" id="svc-message-hint"></p>
       </div>
       <label class="checkbox-field">
-        <input id="svc-bypass" type="checkbox">
+        <input id="svc-bypass" type="checkbox" aria-describedby="svc-bypass-hint">
         <span id="svc-bypass-label"></span>
       </label>
+      <p class="field-hint" id="svc-bypass-hint"></p>
       <p class="field-error" id="service-form-error" role="alert" hidden></p>
       <div class="dialog-actions">
         <button type="button" id="service-cancel-btn"></button>

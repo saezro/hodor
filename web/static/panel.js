@@ -9,6 +9,10 @@
   var CSRF = cfg.csrf;
   var DURATIONS = (cfg.durations && cfg.durations.length) ? cfg.durations : ["1h", "3h", "6h", "24h"];
   var LANG = cfg.lang === "es" ? "es" : "en";
+  // Declared up front (not just where loadSettings used to set it) so
+  // openServiceDialog/key-add-btn can also lazily init the settings
+  // chrome if opened before the Settings tab was ever visited.
+  var settingsChromeReady = false;
 
   var STR = {
     en: {
@@ -32,11 +36,27 @@
       svcHosts: "Hosts (comma-separated)", svcMode: "Mode", svcUpstream: "Upstream URL",
       svcGroup: "Group (optional)", svcAccent: "Accent color (optional)",
       svcMessage: "Closed-page message (optional)",
-      svcBypass: "Skip the closed page while this is the only closed service",
+      svcBypass: "Devices with a pass get in even while closed",
+      svcNameHint: "Internal identifier (also used for this service's pass cookie); can't be changed after creating it.",
+      svcTitleHint: "Name shown in the panel and the closed page; falls back to the name if left blank.",
+      svcHostsHint: "Domains that route to this service — hodor matches the request's Host header against this list.",
+      svcModeHint: "Proxy: hodor forwards requests straight to Upstream. forwardAuth: your own reverse proxy (Caddy, Traefik, nginx…) asks hodor at /auth and serves the request itself.",
+      svcUpstreamHint: "Where hodor forwards requests in proxy mode, e.g. http://127.0.0.1:5000. Not used in forwardAuth mode.",
+      svcGroupHint: "Services sharing a group open and close together as one switch. Leave blank to control this service on its own.",
+      svcAccentHint: "Accent color for this service's closed page, as a hex code like #C97A2E.",
+      svcMessageHint: "Custom text shown on this service's closed page instead of the default message.",
+      svcBypassHint: "A device that already got a pass (e.g. the TV) keeps working after the service closes again for everyone else.",
       svcSave: "Save", svcCancel: "Cancel",
       svcDeleteConfirm: "Delete this service from the overlay?",
       svcSaved: "service saved", svcDeleted: "service deleted",
-      durHeading: "Open-for durations", durSave: "Save", durSaved: "durations saved",
+      durSaved: "durations saved",
+      genDurationsLabel: "Open-for durations (comma-separated)",
+      settingsGeneralDesc: "Webhook, pass duration and the quick open-for presets.",
+      settingsServicesDesc: "Edit or remove the services you added here; services from the base config are read-only and managed in the config file.",
+      settingsKeysDesc: "Scoped keys to open or close services from outside the panel.",
+      settingsAdvancedHeading: "Advanced",
+      settingsAdvancedDesc: "Panel access, trusted proxies and the admin token. Changing these can lock you out of the panel.",
+      advSaved: "advanced settings saved",
       keysHeading: "API keys", keyAdd: "New key", keyAddTitle: "New API key",
       noKeys: "No API keys yet.",
       keyName: "Name", keyServices: "Services (comma-separated, or *)",
@@ -47,7 +67,7 @@
       keyResultTitle: "Key created", keyResultWarning: "Copy it now — it will not be shown again.",
       keyResultValueLabel: "API key", keyResultSnippetLabel: "Embeddable snippet (script or iframe)",
       copy: "Copy", copied: "Copied", closeBtn: "Close",
-      reloadHeading: "Reload configuration", reloadBtn: "Reload config",
+      reloadBtn: "Reload config",
       reloadDone: "config reloaded", reloadWarnings: "Reloaded with warnings:",
       // General settings block (see render in panel.js below).
       genHeading: "General", genSave: "Save", genSaved: "general settings saved",
@@ -55,7 +75,6 @@
       genLangLabel: "Language", genAdminPublicUrlLabel: "Public admin URL",
       genAdminAllowCidrsLabel: "Allowed admin IPs/CIDRs (one per line)",
       genOnChangeLabel: "Webhook on change", genPassTtlLabel: "Pass duration",
-      genAdvancedSummary: "Advanced",
       genAdminTokenLabel: "Admin token", genAdminTokenConfigured: "configured",
       genAdminTokenNotConfigured: "not configured",
       genAdminTokenSet: "Set", genAdminTokenClear: "Remove",
@@ -95,11 +114,19 @@
       svcHosts: "Hosts (separados por coma)", svcMode: "Modo", svcUpstream: "URL de destino",
       svcGroup: "Grupo (opcional)", svcAccent: "Color de acento (opcional)",
       svcMessage: "Mensaje de página cerrada (opcional)",
-      svcBypass: "Saltar la página cerrada mientras este sea el único servicio cerrado",
+      svcBypass: "Los dispositivos con pase entran aunque esté cerrado",
+      svcNameHint: "Identificador interno (también nombra la cookie de pase); no se puede cambiar después de crearlo.", svcTitleHint: "Nombre que se ve en el panel y en la página de cerrado; si se deja vacío, se usa el identificador.", svcHostsHint: "Dominios que llevan a este servicio: hodor compara la cabecera Host de cada petición con esta lista.", svcModeHint: "Proxy: hodor reenvía las peticiones directamente a la URL de destino. forwardAuth: tu propio proxy (Caddy, Traefik, nginx…) pregunta a hodor en /auth y sirve él la petición.", svcUpstreamHint: "Adónde reenvía hodor en modo proxy, p. ej. http://127.0.0.1:5000. No se usa en modo forwardAuth.", svcGroupHint: "Los servicios del mismo grupo se abren y cierran juntos con un solo interruptor. Vacío = este servicio va por su cuenta.", svcAccentHint: "Color de la página de cerrado de este servicio, en hexadecimal, p. ej. #C97A2E.", svcMessageHint: "Texto propio que se muestra en la página de cerrado en lugar del mensaje por defecto.", svcBypassHint: "Un dispositivo que ya tiene pase (p. ej. la tele) sigue entrando cuando el servicio se vuelve a cerrar para los demás.",
       svcSave: "Guardar", svcCancel: "Cancelar",
       svcDeleteConfirm: "¿Eliminar este servicio del overlay?",
       svcSaved: "servicio guardado", svcDeleted: "servicio eliminado",
-      durHeading: "Duraciones de apertura", durSave: "Guardar", durSaved: "duraciones guardadas",
+      durSaved: "duraciones guardadas",
+      genDurationsLabel: "Duraciones de apertura (separadas por coma)",
+      settingsGeneralDesc: "Webhook, duración del pase y las duraciones rápidas de apertura.",
+      settingsServicesDesc: "Edita o elimina los servicios que has añadido aquí; los de la configuración base son de solo lectura y se gestionan en el archivo de configuración.",
+      settingsKeysDesc: "Claves con permisos concretos para abrir o cerrar servicios desde fuera del panel.",
+      settingsAdvancedHeading: "Avanzado",
+      settingsAdvancedDesc: "Acceso al panel, proxies de confianza y el token de administrador. Cambiarlos puede dejarte sin acceso al panel.",
+      advSaved: "ajustes avanzados guardados",
       keysHeading: "Claves de API", keyAdd: "Nueva clave", keyAddTitle: "Nueva clave de API",
       noKeys: "Aún no hay claves de API.",
       keyName: "Nombre", keyServices: "Servicios (separados por coma, o *)",
@@ -110,14 +137,13 @@
       keyResultTitle: "Clave creada", keyResultWarning: "Cópiala ahora — no volverá a mostrarse.",
       keyResultValueLabel: "Clave de API", keyResultSnippetLabel: "Fragmento insertable (script o iframe)",
       copy: "Copiar", copied: "Copiado", closeBtn: "Cerrar",
-      reloadHeading: "Recargar configuración", reloadBtn: "Recargar config",
+      reloadBtn: "Recargar config",
       reloadDone: "config recargada", reloadWarnings: "Recargada con avisos:",
       genHeading: "General", genSave: "Guardar", genSaved: "configuración general guardada",
       genLocked: "fijado por archivo/entorno",
       genLangLabel: "Idioma", genAdminPublicUrlLabel: "URL pública del panel",
       genAdminAllowCidrsLabel: "IPs/CIDRs permitidas para el panel (una por línea)",
       genOnChangeLabel: "Webhook al cambiar", genPassTtlLabel: "Duración del pase",
-      genAdvancedSummary: "Avanzado",
       genAdminTokenLabel: "Token de administración", genAdminTokenConfigured: "configurado",
       genAdminTokenNotConfigured: "no configurado",
       genAdminTokenSet: "Establecer", genAdminTokenClear: "Quitar",
@@ -192,7 +218,7 @@
     setupBannerLinkBtn.addEventListener("click", function () {
       showTab("settings");
       history.replaceState(null, "", "#settings");
-      var advanced = document.getElementById("general-advanced");
+      var advanced = document.getElementById("settings-advanced");
       if (advanced) advanced.open = true;
       document.getElementById("gen-admin-token").focus();
     });
@@ -566,12 +592,24 @@
   // rows get their button text from STR rather than the template.
   function initSettingsChrome() {
     document.getElementById("settings-general-h").textContent = STR.genHeading;
+    document.getElementById("settings-general-desc").textContent = STR.settingsGeneralDesc;
+    document.getElementById("gen-on-change-label").textContent = STR.genOnChangeLabel;
+    document.getElementById("gen-pass-ttl-label").textContent = STR.genPassTtlLabel;
+    document.getElementById("gen-durations-label").textContent = STR.genDurationsLabel;
+    document.getElementById("general-save-btn").textContent = STR.genSave;
+
+    document.getElementById("settings-services-h").textContent = STR.svcHeading;
+    document.getElementById("settings-services-desc").textContent = STR.settingsServicesDesc;
+
+    document.getElementById("settings-keys-h").textContent = STR.keysHeading;
+    document.getElementById("settings-keys-desc").textContent = STR.settingsKeysDesc;
+    document.getElementById("key-add-btn").textContent = STR.keyAdd;
+
+    document.getElementById("settings-advanced-h").textContent = STR.settingsAdvancedHeading;
+    document.getElementById("settings-advanced-desc").textContent = STR.settingsAdvancedDesc;
     document.getElementById("gen-lang-label").textContent = STR.genLangLabel;
     document.getElementById("gen-admin-public-url-label").textContent = STR.genAdminPublicUrlLabel;
     document.getElementById("gen-admin-allow-cidrs-label").textContent = STR.genAdminAllowCidrsLabel;
-    document.getElementById("gen-on-change-label").textContent = STR.genOnChangeLabel;
-    document.getElementById("gen-pass-ttl-label").textContent = STR.genPassTtlLabel;
-    document.getElementById("gen-advanced-summary").textContent = STR.genAdvancedSummary;
     document.getElementById("gen-admin-token-label").textContent = STR.genAdminTokenLabel;
     document.getElementById("gen-admin-token-set-btn").textContent = STR.genAdminTokenSet;
     document.getElementById("gen-admin-token-clear-btn").textContent = STR.genAdminTokenClear;
@@ -580,18 +618,10 @@
     document.getElementById("gen-public-trusted-proxies-label").textContent = STR.genPublicTrustedProxiesLabel;
     document.getElementById("gen-public-cookie-secure-label").textContent = STR.genPublicCookieSecureLabel;
     document.getElementById("gen-fixed-note").textContent = STR.genFixedNote;
-    document.getElementById("general-save-btn").textContent = STR.genSave;
-    [].forEach.call(document.querySelectorAll("#general-form .badge.base"), function (b) {
+    document.getElementById("advanced-save-btn").textContent = STR.genSave;
+    [].forEach.call(document.querySelectorAll("#advanced-form .badge.base"), function (b) {
       b.textContent = STR.genLocked;
     });
-
-    document.getElementById("settings-services-h").textContent = STR.svcHeading;
-    document.getElementById("service-add-btn").textContent = STR.svcAdd;
-    document.getElementById("settings-durations-h").textContent = STR.durHeading;
-    document.getElementById("durations-save-btn").textContent = STR.durSave;
-    document.getElementById("settings-keys-h").textContent = STR.keysHeading;
-    document.getElementById("key-add-btn").textContent = STR.keyAdd;
-    document.getElementById("settings-reload-h").textContent = STR.reloadHeading;
     document.getElementById("reload-btn").textContent = STR.reloadBtn;
 
     document.getElementById("svc-name-label").textContent = STR.svcName;
@@ -603,6 +633,15 @@
     document.getElementById("svc-accent-label").textContent = STR.svcAccent;
     document.getElementById("svc-message-label").textContent = STR.svcMessage;
     document.getElementById("svc-bypass-label").textContent = STR.svcBypass;
+    document.getElementById("svc-name-hint").textContent = STR.svcNameHint;
+    document.getElementById("svc-title-hint").textContent = STR.svcTitleHint;
+    document.getElementById("svc-hosts-hint").textContent = STR.svcHostsHint;
+    document.getElementById("svc-mode-hint").textContent = STR.svcModeHint;
+    document.getElementById("svc-upstream-hint").textContent = STR.svcUpstreamHint;
+    document.getElementById("svc-group-hint").textContent = STR.svcGroupHint;
+    document.getElementById("svc-accent-hint").textContent = STR.svcAccentHint;
+    document.getElementById("svc-message-hint").textContent = STR.svcMessageHint;
+    document.getElementById("svc-bypass-hint").textContent = STR.svcBypassHint;
     document.getElementById("service-cancel-btn").textContent = STR.svcCancel;
     document.getElementById("service-save-btn").textContent = STR.svcSave;
 
@@ -634,6 +673,10 @@
   });
 
   function openServiceDialog(svc) {
+    // Reachable from the Services tab's own add button (see below),
+    // which can fire before Settings/initSettingsChrome ever ran — the
+    // labels/button text for this dialog are set there, not here.
+    if (!settingsChromeReady) { initSettingsChrome(); settingsChromeReady = true; }
     serviceFormError.hidden = true;
     editingServiceName = svc ? svc.name : null;
     document.getElementById("service-dialog-title").textContent = svc ? STR.svcEditTitle : STR.svcAddTitle;
@@ -647,11 +690,17 @@
     document.getElementById("svc-group").value = svc ? svc.group || "" : "";
     document.getElementById("svc-accent").value = svc ? svc.accent_color || "" : "";
     document.getElementById("svc-message").value = svc ? svc.message || "" : "";
-    document.getElementById("svc-bypass").checked = !!(svc && svc.pass_bypasses_closed);
+    document.getElementById("svc-bypass").checked = !svc || svc.pass_bypasses_closed !== false;
     serviceDialog.showModal();
   }
 
-  document.getElementById("service-add-btn").addEventListener("click", function () { openServiceDialog(null); });
+  // The only "add service" trigger left in the UI (Settings used to have
+  // its own duplicate button — Cas: "quiero ahí mismo el botón de añadir
+  // servicio", 2026-10-27): header of the Services tab, next to the hint,
+  // reusing this same dialog/flow. Its text is set here instead of lazily
+  // in initSettingsChrome since Services is the default tab.
+  document.getElementById("services-add-btn").textContent = STR.svcAdd;
+  document.getElementById("services-add-btn").addEventListener("click", function () { openServiceDialog(null); });
   document.getElementById("service-cancel-btn").addEventListener("click", function () { serviceDialog.close(); });
 
   serviceForm.addEventListener("submit", function (ev) {
@@ -672,7 +721,7 @@
     // Omitted unless checked: the field is *bool server-side and an
     // explicit false would override the base default, not just leave it
     // alone, so "unchecked" here means "don't set it" rather than "off".
-    if (document.getElementById("svc-bypass").checked) body.pass_bypasses_closed = true;
+    body.pass_bypasses_closed = document.getElementById("svc-bypass").checked;
 
     var saveBtn = document.getElementById("service-save-btn");
     saveBtn.disabled = true;
@@ -688,33 +737,33 @@
   });
 
   function renderSettingsServices(services) {
+    // Only overlay (panel-managed) services: base ones have no action
+    // here (edit/delete are 409s against the base config) and listing
+    // them was just the same data already shown, with no buttons, in
+    // the Services tab (Cas: "la config es terrible" / duplicate list,
+    // 2026-10-27).
+    var overlayServices = (services || []).filter(function (svc) { return svc.source !== "base"; });
     var list = document.getElementById("settings-services-list");
     list.setAttribute("aria-busy", "false");
     list.innerHTML = "";
-    if (!services.length) {
+    if (!overlayServices.length) {
       list.appendChild(emptyServicesState());
       return;
     }
-    services.forEach(function (svc) {
+    overlayServices.forEach(function (svc) {
       var meta = (svc.hosts || []).join(", ") + " · " + svc.mode + (svc.group ? " · " + STR.group + ": " + svc.group : "");
-      var isBase = svc.source === "base";
-      var badge = el("span", { class: "badge " + (isBase ? "base" : "open"), text: isBase ? STR.base : STR.overlay });
-      var actions;
-      if (isBase) {
-        actions = el("div", { class: "actions" }, []);
-      } else {
-        var editBtn = el("button", { type: "button", text: STR.svcEdit });
-        editBtn.addEventListener("click", function () { openServiceDialog(svc); });
-        var delBtn = el("button", { class: "danger", type: "button", text: STR.svcDelete });
-        delBtn.addEventListener("click", function () {
-          if (!window.confirm(STR.svcDeleteConfirm)) return;
-          delBtn.disabled = true;
-          api("/api/config/services/" + encodeURIComponent(svc.name), { method: "DELETE" })
-            .then(function () { toast(STR.svcDeleted); loadSettings(); loadServices(); })
-            .catch(function (e) { toast(formError(e), true); delBtn.disabled = false; });
-        });
-        actions = el("div", { class: "actions" }, [editBtn, delBtn]);
-      }
+      var badge = el("span", { class: "badge open", text: STR.overlay });
+      var editBtn = el("button", { type: "button", text: STR.svcEdit });
+      editBtn.addEventListener("click", function () { openServiceDialog(svc); });
+      var delBtn = el("button", { class: "danger", type: "button", text: STR.svcDelete });
+      delBtn.addEventListener("click", function () {
+        if (!window.confirm(STR.svcDeleteConfirm)) return;
+        delBtn.disabled = true;
+        api("/api/config/services/" + encodeURIComponent(svc.name), { method: "DELETE" })
+          .then(function () { toast(STR.svcDeleted); loadSettings(); loadServices(); })
+          .catch(function (e) { toast(formError(e), true); delBtn.disabled = false; });
+      });
+      var actions = el("div", { class: "actions" }, [editBtn, delBtn]);
       list.appendChild(el("div", { class: "row settings-row" }, [
         el("div", { class: "row-main" }, [
           el("span", { class: "name", text: svc.title || svc.name }),
@@ -726,18 +775,10 @@
     });
   }
 
-  var durationsForm = document.getElementById("durations-form");
-  var durationsInput = document.getElementById("durations-input");
-  durationsForm.addEventListener("submit", function (ev) {
-    ev.preventDefault();
-    var durations = splitList(durationsInput.value);
-    var btn = document.getElementById("durations-save-btn");
-    btn.disabled = true;
-    api("/api/config/durations", { method: "PUT", body: { durations: durations } })
-      .then(function () { DURATIONS = durations.length ? durations : DURATIONS; toast(STR.durSaved); })
-      .catch(function (e) { toast(formError(e), true); })
-      .finally(function () { btn.disabled = false; });
-  });
+  // Durations now live as one more field inside the General form/Save
+  // (see generalForm submit below) instead of their own block + Save
+  // button (Cas: several scattered Save buttons, 2026-10-27).
+  var durationsInput = document.getElementById("gen-durations");
 
   var keyDialog = document.getElementById("key-dialog");
   var keyForm = document.getElementById("key-form");
@@ -841,6 +882,8 @@
   // alone", see internal/admin/panel.go) and never a locked one.
   var generalForm = document.getElementById("general-form");
   var generalFormError = document.getElementById("general-form-error");
+  var advancedForm = document.getElementById("advanced-form");
+  var advancedFormError = document.getElementById("advanced-form-error");
   var originalGeneral = null;
   var generalLocked = {};
 
@@ -848,7 +891,10 @@
   // purpose (security decision, 2026-10-26): the backend strips them from
   // the PUT body, so the panel only ever displays whatever value is
   // already configured (see renderGeneral below) instead of pretending
-  // they are editable.
+  // they are editable. Split 2026-10-27 between the General card (webhook,
+  // pass duration, open-for durations — one Save) and the discreet
+  // Advanced section (panel access/token — its own Save), still the same
+  // PUT /api/config/general endpoint underneath, just two field subsets.
   var GENERAL_FIELD_IDS = {
     lang: "gen-lang",
     admin_public_url: "gen-admin-public-url",
@@ -856,11 +902,12 @@
     public_trusted_proxies: "gen-public-trusted-proxies",
     public_cookie_secure: "gen-public-cookie-secure",
     pass_ttl: "gen-pass-ttl",
-    on_change: "gen-on-change"
+    on_change: "gen-on-change",
+    durations: "gen-durations"
   };
 
-  function clearGeneralErrors() {
-    generalFormError.hidden = true;
+  function clearFieldErrors(genericEl) {
+    genericEl.hidden = true;
     Object.keys(GENERAL_FIELD_IDS).forEach(function (field) {
       var fe = document.getElementById(GENERAL_FIELD_IDS[field] + "-error");
       if (fe) { fe.hidden = true; fe.textContent = ""; }
@@ -868,11 +915,11 @@
     document.getElementById("gen-admin-token-error").hidden = true;
   }
 
-  function showGeneralErrors(err) {
-    clearGeneralErrors();
+  function showFieldErrors(err, genericEl) {
+    clearFieldErrors(genericEl);
     if (err && err.body && err.body.error === "would lock you out") {
-      generalFormError.textContent = STR.genLockoutError;
-      generalFormError.hidden = false;
+      genericEl.textContent = STR.genLockoutError;
+      genericEl.hidden = false;
       return;
     }
     if (err && err.body && err.body.errors) {
@@ -884,8 +931,8 @@
       });
       if (any) return;
     }
-    generalFormError.textContent = formError(err);
-    generalFormError.hidden = false;
+    genericEl.textContent = formError(err);
+    genericEl.hidden = false;
   }
 
   function setGeneralFieldLocked(field, inputEl) {
@@ -954,9 +1001,48 @@
     updateSetupBanner(!!originalGeneral.admin_token_set);
   }
 
+  // General Save: webhook + pass duration (both PUT /api/config/general)
+  // plus the open-for durations (PUT /api/config/durations, a different
+  // endpoint — not merged backend-side to avoid an API change) behind one
+  // button and one toast (Cas: several scattered Saves, 2026-10-27).
   generalForm.addEventListener("submit", function (ev) {
     ev.preventDefault();
-    clearGeneralErrors();
+    clearFieldErrors(generalFormError);
+    if (!originalGeneral) return;
+
+    var body = {};
+    function maybeSet(field, val) {
+      if (generalLocked[field]) return;
+      if (JSON.stringify(originalGeneral[field] || null) !== JSON.stringify(val || null)) body[field] = val;
+    }
+    maybeSet("on_change", document.getElementById("gen-on-change").value.trim());
+    maybeSet("pass_ttl", document.getElementById("gen-pass-ttl").value.trim());
+
+    var durations = splitList(durationsInput.value);
+    var durationsChanged = JSON.stringify(durations) !== JSON.stringify(DURATIONS);
+
+    if (!Object.keys(body).length && !durationsChanged) { toast(STR.genNothingChanged); return; }
+
+    var btn = document.getElementById("general-save-btn");
+    btn.disabled = true;
+    var p = Object.keys(body).length ? api("/api/config/general", { method: "PUT", body: body }) : Promise.resolve();
+    p.then(function () {
+        if (!durationsChanged) return;
+        return api("/api/config/durations", { method: "PUT", body: { durations: durations } })
+          .then(function () { DURATIONS = durations.length ? durations : DURATIONS; });
+      })
+      .then(function () { toast(STR.genSaved); loadSettings(); })
+      .catch(function (e) { showFieldErrors(e, generalFormError); })
+      .finally(function () { btn.disabled = false; });
+  });
+
+  // Advanced Save: lang, admin public URL/CIDRs, public trusted proxies
+  // and cookie-secure — all PUT /api/config/general, separate from the
+  // General card's own Save since this is the risk-of-lockout group
+  // (lang reloads the page; URL/CIDRs can shut the admin's own IP out).
+  advancedForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    clearFieldErrors(advancedFormError);
     if (!originalGeneral) return;
 
     var body = {};
@@ -967,28 +1053,26 @@
     maybeSet("lang", document.getElementById("gen-lang").value);
     maybeSet("admin_public_url", document.getElementById("gen-admin-public-url").value.trim());
     maybeSet("admin_allow_cidrs", splitLines(document.getElementById("gen-admin-allow-cidrs").value));
-    maybeSet("on_change", document.getElementById("gen-on-change").value.trim());
-    maybeSet("pass_ttl", document.getElementById("gen-pass-ttl").value.trim());
     maybeSet("public_trusted_proxies", splitLines(document.getElementById("gen-public-trusted-proxies").value));
     maybeSet("public_cookie_secure", document.getElementById("gen-public-cookie-secure").checked);
 
     if (!Object.keys(body).length) { toast(STR.genNothingChanged); return; }
 
     var langChanged = "lang" in body;
-    var btn = document.getElementById("general-save-btn");
+    var btn = document.getElementById("advanced-save-btn");
     btn.disabled = true;
     api("/api/config/general", { method: "PUT", body: body })
       .then(function () {
-        toast(STR.genSaved);
+        toast(STR.advSaved);
         if (langChanged) { location.reload(); return; }
         loadSettings();
       })
-      .catch(function (e) { showGeneralErrors(e); })
+      .catch(function (e) { showFieldErrors(e, advancedFormError); })
       .finally(function () { btn.disabled = false; });
   });
 
   document.getElementById("gen-admin-token-set-btn").addEventListener("click", function () {
-    clearGeneralErrors();
+    clearFieldErrors(advancedFormError);
     var input = document.getElementById("gen-admin-token");
     var value = input.value.trim();
     var errEl = document.getElementById("gen-admin-token-error");
@@ -1011,7 +1095,7 @@
   });
 
   document.getElementById("gen-admin-token-clear-btn").addEventListener("click", function () {
-    clearGeneralErrors();
+    clearFieldErrors(advancedFormError);
     var btn = this;
     btn.disabled = true;
     api("/api/config/general", { method: "PUT", body: { admin_token: "" } })
@@ -1054,7 +1138,6 @@
       .finally(function () { btn.disabled = false; });
   });
 
-  var settingsChromeReady = false;
   function loadSettings() {
     if (!settingsChromeReady) { initSettingsChrome(); settingsChromeReady = true; }
     return api("/api/config").then(function (cfg) {
