@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-27
+
+### Fixed
+
+- Admin panel: tabs left open across a `hodor` restart got stuck failing
+  with a 403 CSRF error (the CSRF secret is per-process) until manually
+  reloaded; the panel now fetches a fresh token and retries the request
+  once instead.
+- Admin panel: actions performed through SSO (`admin.auth_header`) were
+  logged and shown as "by `<IP>`" instead of the actual SSO user.
+
 ### Changed
 
 - Admin panel: "Add service" button lives in the Services tab; the

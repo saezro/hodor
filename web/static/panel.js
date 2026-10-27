@@ -317,7 +317,7 @@
     });
   }
 
-  function api(path, opts) {
+  function api(path, opts, _isCsrfRetry) {
     opts = opts || {};
     var headers = opts.headers || {};
     if (opts.method && opts.method !== "GET") headers["X-CSRF-Token"] = CSRF;
@@ -332,6 +332,22 @@
       setOffline(false);
       if (!r.ok) {
         if (r.status === 401) showLoginDialog(r.headers.get("X-Hodor-Setup") === "1");
+        // A 403 on a mutating request most likely means this tab's CSRF
+        // token (embedded in the page when it loaded) went stale because
+        // hodor restarted meanwhile: the CSRF secret is per-process (see
+        // Server.csrfToken/csrfAndAuth in internal/admin/middleware.go),
+        // so every tab left open across a restart would otherwise be
+        // stuck failing until manually reloaded. Fetch a fresh token from
+        // GET /api/csrf (needs auth but no CSRF token itself) and retry
+        // this request exactly once before giving up.
+        if (r.status === 403 && !_isCsrfRetry && opts.method && opts.method !== "GET") {
+          return api("/api/csrf", { method: "GET" }).then(function (b) {
+            if (b && b.token) CSRF = b.token;
+            return api(path, opts, true);
+          }).catch(function () {
+            return Promise.reject(new Error(r.status + " " + r.statusText));
+          });
+        }
         return r.json().catch(function () { return {}; }).then(function (b) {
           // body kept on the error so settings forms can show the
           // per-field message from a 400 {"errors":{field:msg}} instead

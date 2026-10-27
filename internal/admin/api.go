@@ -69,7 +69,7 @@ func (s *Server) handleServiceOpen(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "unknown service or group"})
 		return
 	}
-	s.openService(w, r, key, clientLabel(r, s.cfg()))
+	s.openService(w, r, key, s.actorLabel(r))
 }
 
 func (s *Server) handleServiceClose(w http.ResponseWriter, r *http.Request) {
@@ -211,6 +211,19 @@ func clientLabel(r *http.Request, cfg *config.Config) string {
 		return "admin"
 	}
 	return ip.String()
+}
+
+// actorLabel is the label recorded as state.Entry.OpenedBy (and shown
+// by the panel as "by <actor>") for an action performed through the
+// panel's own /api/* (not /api/v1, which has its own v1Identity.openedBy):
+// when r carries a trusted SSO header identity (see Server.headerUser),
+// that identity is used so the panel shows the actual user instead of
+// the reverse proxy's IP; otherwise it falls back to clientLabel.
+func (s *Server) actorLabel(r *http.Request) string {
+	if user, present, allowed := s.headerUser(r); present && allowed {
+		return user
+	}
+	return clientLabel(r, s.cfg())
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

@@ -108,6 +108,55 @@ func TestCsrfAndAuth_HeaderSSO(t *testing.T) {
 	})
 }
 
+// TestOpenService_OpenedBy_SSOUserOverIP exercises Server.actorLabel: a
+// service opened through header-based SSO auth is recorded (and shown
+// by the panel, which just renders ServiceView.OpenedBy) with the SSO
+// username rather than the caller's IP; falling back to the IP when no
+// SSO identity is present still works too.
+func TestOpenService_OpenedBy_SSOUserOverIP(t *testing.T) {
+	const adminYAML = "admin:\n  token: sekret\n  trusted_proxies: [10.0.0.1/32]\n  auth_header: Remote-User\n"
+	srv, _ := newLiveTestServer(t, adminYAML)
+	headerCreds := map[string]string{"Remote-User": "ro"}
+
+	token := headerCSRFToken(t, srv, "10.0.0.1:1234", headerCreds)
+	withCSRF := map[string]string{"Remote-User": "ro", "X-CSRF-Token": token}
+	rec := doReq(srv, http.MethodPost, "/api/services/svc1/open", "10.0.0.1:1234", withCSRF)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("POST .../open via SSO header = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doReq(srv, http.MethodGet, "/api/services", "10.0.0.1:1234", withCSRF)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/services = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	var views []ServiceView
+	if err := json.Unmarshal(rec.Body.Bytes(), &views); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(views) != 1 || views[0].OpenedBy != "ro" {
+		t.Fatalf("svc1 OpenedBy = %+v, want \"ro\"", views)
+	}
+
+	// Close it, then reopen via a plain bearer token (no SSO identity):
+	// falls back to the IP, as before.
+	bearer := map[string]string{"Authorization": "Bearer sekret"}
+	rec = doReq(srv, http.MethodPost, "/api/services/svc1/close", "127.0.0.1:1234", bearer)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("POST .../close via bearer = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+	rec = doReq(srv, http.MethodPost, "/api/services/svc1/open", "127.0.0.1:1234", bearer)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("POST .../open via bearer = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+	rec = doReq(srv, http.MethodGet, "/api/services", "127.0.0.1:1234", bearer)
+	if err := json.Unmarshal(rec.Body.Bytes(), &views); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(views) != 1 || views[0].OpenedBy != "127.0.0.1" {
+		t.Fatalf("svc1 OpenedBy = %+v, want \"127.0.0.1\"", views)
+	}
+}
+
 // TestCsrfAndAuth_SetupTokenThenLive exercises the zero-file/no-admin.token
 // path end to end: while Admin.Token is empty, only the in-memory setup
 // token is a valid bearer (and the response carries X-Hodor-Setup so the
